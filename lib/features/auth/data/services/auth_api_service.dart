@@ -9,6 +9,89 @@ class AuthApiService {
 
   final http.Client _client;
 
+  Future<AuthResponse> loginWithEmail({
+    required String email,
+    required String password,
+    String? deviceToken,
+  }) async {
+    final uri = Uri.parse('${AppConfig.apiBaseUrl}/auth/login');
+    final payload = <String, dynamic>{'email': email, 'password': password};
+    if (deviceToken != null && deviceToken.isNotEmpty) {
+      payload['device_token'] = deviceToken;
+    }
+
+    final response = await _client.post(
+      uri,
+      headers: const {'Content-Type': 'application/json'},
+      body: jsonEncode(payload),
+    );
+
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode != 200) {
+      final message = body['message']?.toString() ?? 'Login failed';
+      throw Exception(message);
+    }
+
+    return AuthResponse.fromJson(body);
+  }
+
+  Future<RegisterResponse> registerAccount({
+    required String fullName,
+    required String email,
+    required String password,
+    String? deviceToken,
+    bool notiFood = false,
+    bool notiCalendars = false,
+    bool profileFree = false,
+    bool foodFree = false,
+    bool foodPlanFree = false,
+    bool bcsFree = false,
+    bool diseaseFree = false,
+    String paymentPlan = '',
+    String subscriptionStatus = '',
+    String tier = '',
+  }) async {
+    final uri = Uri.parse('${AppConfig.apiBaseUrl}/auth/register');
+    final trimmed = fullName.trim();
+    final parts = trimmed.split(RegExp(r'\s+'));
+    final firstName = parts.isNotEmpty ? parts.first : '';
+    final lastName = parts.length > 1 ? parts.sublist(1).join(' ') : '';
+
+    final payload = <String, dynamic>{
+      'first_name': firstName,
+      'last_name': lastName,
+      'email': email,
+      'password': password,
+      'noti_food': notiFood,
+      'noti_calendars': notiCalendars,
+      'profile_free': profileFree,
+      'food_free': foodFree,
+      'food_plan_free': foodPlanFree,
+      'bcs_free': bcsFree,
+      'disease_free': diseaseFree,
+      'payment_plan': paymentPlan,
+      'subscription_status': subscriptionStatus,
+      'tier': tier,
+    };
+    if (deviceToken != null && deviceToken.isNotEmpty) {
+      payload['device_token'] = deviceToken;
+    }
+
+    final response = await _client.post(
+      uri,
+      headers: const {'Content-Type': 'application/json'},
+      body: jsonEncode(payload),
+    );
+
+    final body = jsonDecode(response.body) as Map<String, dynamic>;
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      final message = body['message']?.toString() ?? 'Register failed';
+      throw Exception(message);
+    }
+
+    return RegisterResponse.fromJson(body);
+  }
+
   Future<AuthResponse> loginWithGoogle({
     required String authCode,
     required String deviceToken,

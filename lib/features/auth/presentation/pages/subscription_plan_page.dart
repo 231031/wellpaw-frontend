@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:well_paw/core/theme/app_colors.dart';
 import 'package:well_paw/core/theme/app_text_styles.dart';
 import 'package:well_paw/core/widgets/custom_button.dart';
-import 'package:well_paw/features/onboarding/presentation/pages/welcome_flow_page.dart';
+import 'package:well_paw/features/home/presentation/pages/home_page.dart';
 
 class SubscriptionPlanPage extends StatelessWidget {
   const SubscriptionPlanPage({super.key});
@@ -42,8 +42,9 @@ class SubscriptionPlanPage extends StatelessWidget {
                 color: AppColors.planFree,
                 buttonText: 'เริ่มทดลองใช้ฟรี',
                 onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const WelcomeFlowPage()),
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const HomePage()),
+                    (route) => false,
                   );
                 },
                 features: const [
@@ -71,8 +72,9 @@ class SubscriptionPlanPage extends StatelessWidget {
                 color: AppColors.planBlue,
                 buttonText: 'เลือกแพ็กเกจนี้',
                 onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const WelcomeFlowPage()),
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const HomePage()),
+                    (route) => false,
                   );
                 },
                 features: const [
@@ -99,8 +101,9 @@ class SubscriptionPlanPage extends StatelessWidget {
                 color: AppColors.planPink,
                 buttonText: 'เลือกแพ็กเกจนี้',
                 onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const WelcomeFlowPage()),
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const HomePage()),
+                    (route) => false,
                   );
                 },
                 features: const [

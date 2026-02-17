@@ -49,3 +49,53 @@ class AuthResponse {
     );
   }
 }
+
+class RegisterResponse {
+  final AuthUser user;
+  final TokenPair? token;
+
+  const RegisterResponse({required this.user, this.token});
+
+  factory RegisterResponse.fromJson(Map<String, dynamic> json) {
+    final data = json['data'];
+    if (data is Map<String, dynamic>) {
+      final userJson = data['user'] ?? data;
+      if (userJson is Map<String, dynamic>) {
+        return RegisterResponse(
+          user: AuthUser.fromJson(userJson),
+          token: _parseOptionalToken(data),
+        );
+      }
+    }
+
+    if (json['user'] is Map<String, dynamic>) {
+      return RegisterResponse(
+        user: AuthUser.fromJson(json['user'] as Map<String, dynamic>),
+        token: _parseOptionalToken(json),
+      );
+    }
+
+    return RegisterResponse(
+      user: AuthUser.fromJson(json),
+      token: _parseOptionalToken(json),
+    );
+  }
+}
+
+TokenPair? _parseOptionalToken(Map<String, dynamic> json) {
+  final token = json['token'];
+  if (token is Map<String, dynamic>) {
+    return TokenPair.fromJson(token);
+  }
+  final data = json['data'];
+  if (data is Map<String, dynamic> && data['token'] is Map<String, dynamic>) {
+    return TokenPair.fromJson(data['token'] as Map<String, dynamic>);
+  }
+  if (json['access_token'] != null && json['refresh_token'] != null) {
+    return TokenPair(
+      accessToken: json['access_token'] as String,
+      refreshToken: json['refresh_token'] as String,
+    );
+  }
+  return null;
+}

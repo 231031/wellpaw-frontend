@@ -1,10 +1,13 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:well_paw/core/config/app_config.dart';
 import 'package:well_paw/core/theme/app_colors.dart';
 import 'package:well_paw/core/theme/app_text_styles.dart';
 import 'package:well_paw/core/widgets/custom_button.dart';
 import 'package:well_paw/core/widgets/custom_text_field.dart';
 import 'package:well_paw/core/widgets/step_indicator.dart';
+import 'package:well_paw/features/auth/data/services/auth_api_service.dart';
+import 'package:well_paw/features/auth/data/storage/token_storage.dart';
 import 'package:well_paw/features/auth/presentation/pages/subscription_plan_page.dart';
 
 class RegisterPasswordPage extends StatefulWidget {
@@ -25,6 +28,9 @@ class _RegisterPasswordPageState extends State<RegisterPasswordPage> {
   final _formKey = GlobalKey<FormState>();
   final _passwordController = TextEditingController();
   final _confirmController = TextEditingController();
+  final _authApi = AuthApiService();
+  final _tokenStorage = const TokenStorage();
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -53,11 +59,73 @@ class _RegisterPasswordPageState extends State<RegisterPasswordPage> {
     return null;
   }
 
-  void _handleCreateAccount() {
-    if (_formKey.currentState!.validate()) {
-      Navigator.of(
-        context,
-      ).push(MaterialPageRoute(builder: (_) => const SubscriptionPlanPage()));
+  Future<String> _getDeviceToken() async {
+    // TODO: Replace with real device token (FCM/APNs).
+    return 'unknown';
+  }
+
+  Future<void> _handleCreateAccount() async {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    if (!AppConfig.hasValidApiBaseUrl) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('กรุณาตั้งค่า API Base URL ก่อนใช้งานการสมัครสมาชิก'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final deviceToken = await _getDeviceToken();
+      final registerResponse = await _authApi.registerAccount(
+        fullName: widget.fullName,
+        email: widget.email,
+        password: _passwordController.text,
+        deviceToken: deviceToken,
+      );
+
+      final token = registerResponse.token;
+      if (token != null) {
+        await _tokenStorage.saveTokens(
+          accessToken: token.accessToken,
+          refreshToken: token.refreshToken,
+        );
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('สร้างบัญชีสำเร็จ!'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+        Navigator.of(
+          context,
+        ).push(MaterialPageRoute(builder: (_) => const SubscriptionPlanPage()));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('สร้างบัญชีไม่สำเร็จ: $error'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -160,6 +228,7 @@ class _RegisterPasswordPageState extends State<RegisterPasswordPage> {
                       child: CustomButton(
                         text: 'สร้างบัญชี',
                         onPressed: _handleCreateAccount,
+                        isLoading: _isLoading,
                       ),
                     ),
                   ],

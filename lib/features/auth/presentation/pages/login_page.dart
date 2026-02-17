@@ -8,6 +8,7 @@ import 'package:well_paw/core/widgets/logo_header.dart';
 import 'package:well_paw/core/widgets/custom_text_field.dart';
 import 'package:well_paw/core/widgets/custom_button.dart';
 import 'package:well_paw/features/auth/presentation/pages/register_basic_page.dart';
+import 'package:well_paw/features/home/presentation/pages/home_page.dart';
 import 'package:well_paw/features/auth/data/services/auth_api_service.dart';
 import 'package:well_paw/features/auth/data/services/google_sign_in_service.dart';
 import 'package:well_paw/features/auth/data/storage/token_storage.dart';
@@ -59,17 +60,36 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _handleLogin() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isLoading = true;
-      });
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
-      // Simulate API call
-      await Future.delayed(const Duration(seconds: 2));
+    if (!AppConfig.hasValidApiBaseUrl) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('กรุณาตั้งค่า API Base URL ก่อนใช้งานการเข้าสู่ระบบ'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
 
-      setState(() {
-        _isLoading = false;
-      });
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final deviceToken = await _getDeviceToken();
+      final authResponse = await _authApi.loginWithEmail(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+        deviceToken: deviceToken,
+      );
+
+      await _tokenStorage.saveTokens(
+        accessToken: authResponse.token.accessToken,
+        refreshToken: authResponse.token.refreshToken,
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -78,9 +98,25 @@ class _LoginPageState extends State<LoginPage> {
             backgroundColor: AppColors.success,
           ),
         );
+        Navigator.of(
+          context,
+        ).pushReplacement(MaterialPageRoute(builder: (_) => const HomePage()));
       }
-
-      // TODO: Navigate to home page
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('เข้าสู่ระบบไม่สำเร็จ: $error'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -153,6 +189,9 @@ class _LoginPageState extends State<LoginPage> {
             backgroundColor: AppColors.success,
           ),
         );
+        Navigator.of(
+          context,
+        ).pushReplacement(MaterialPageRoute(builder: (_) => const HomePage()));
       }
     } catch (error) {
       if (mounted) {
