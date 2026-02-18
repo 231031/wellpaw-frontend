@@ -40,7 +40,7 @@ npm install
 
 ### 5. Configure Environment
 
-Create a `.env` file in `mcp/figma-server/`:
+Copy `.env.example` to `.env` in `mcp/figma-server/` and fill in your values:
 
 ```env
 FIGMA_API_KEY=your_personal_access_token_here

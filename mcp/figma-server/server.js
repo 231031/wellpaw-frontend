@@ -2,6 +2,10 @@
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import {
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+} from "@modelcontextprotocol/sdk/types.js";
 import axios from "axios";
 import dotenv from "dotenv";
 
@@ -24,13 +28,17 @@ const axiosInstance = axios.create({
   },
 });
 
-const server = new Server({
-  name: "figma-mcp",
-  version: "1.0.0",
-  capabilities: {
-    tools: {},
+const server = new Server(
+  {
+    name: "figma-mcp",
+    version: "1.0.0",
   },
-});
+  {
+    capabilities: {
+      tools: {},
+    },
+  }
+);
 
 // Tool definitions
 const tools = [
@@ -301,11 +309,11 @@ async function getPageHierarchy(fileKey, pageName) {
 }
 
 // Register request handlers
-server.setRequestHandler({ method: "tools/list" }, async () => {
+server.setRequestHandler(ListToolsRequestSchema, async () => {
   return { tools };
 });
 
-server.setRequestHandler({ method: "tools/call" }, async (request) => {
+server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     const { name, arguments: args } = request.params;
     let result;

@@ -1,0 +1,12 @@
+{
+  "mcp.servers": {
+    "figma": {
+      "command": "node",
+      "args": ["/Users/junesnns/Senior/wellpaw-frontend/mcp/figma-server/server.js"],
+      "env": {
+        "FIGMA_API_KEY": "${env:FIGMA_API_KEY}",
+        "FIGMA_FILE_KEY": "${env:FIGMA_FILE_KEY}"
+      }
+    }
+  }
+}

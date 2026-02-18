@@ -17,7 +17,7 @@ Open your Figma design file in the browser:
 
 ### Step 3: Create Environment File
 
-In `mcp/figma-server/`, create `.env`:
+In `mcp/figma-server/`, copy `.env.example` to `.env`:
 
 ```env
 FIGMA_API_KEY=figd_abc123...
