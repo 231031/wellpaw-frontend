@@ -1,4 +1,5 @@
 {
+  "java.configuration.updateBuildConfiguration": "interactive",
   "mcp.servers": {
     "figma": {
       "command": "node",

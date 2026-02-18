@@ -29,6 +29,12 @@ class AppColors {
   static const Color iconGray = Color(0xFF888888);
   static const Color dividerGray = Color(0xFFCCCCCC);
 
+  // Plan colors
+  static const Color planFree = Color(0xFF5F6B7A);
+  static const Color planBlue = Color(0xFF3E6DC0);
+  static const Color planPink = Color(0xFFF5B7E3);
+  static const Color shadow = Color(0xFF000000);
+
   // Status Colors
   static const Color error = Color(0xFFE53935);
   static const Color success = Color(0xFF43A047);

@@ -1,9 +1,17 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
+import 'package:well_paw/core/config/app_config.dart';
 import 'package:well_paw/core/theme/app_colors.dart';
 import 'package:well_paw/core/theme/app_text_styles.dart';
 import 'package:well_paw/core/widgets/logo_header.dart';
 import 'package:well_paw/core/widgets/custom_text_field.dart';
 import 'package:well_paw/core/widgets/custom_button.dart';
+import 'package:well_paw/features/auth/presentation/pages/register_basic_page.dart';
+import 'package:well_paw/features/home/presentation/pages/home_page.dart';
+import 'package:well_paw/features/auth/data/services/auth_api_service.dart';
+import 'package:well_paw/features/auth/data/services/google_sign_in_service.dart';
+import 'package:well_paw/features/auth/data/storage/token_storage.dart';
 
 /// Login Page - WellPaw Authentication
 class LoginPage extends StatefulWidget {
@@ -17,7 +25,11 @@ class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _authApi = AuthApiService();
+  final _googleSignIn = GoogleSignInService();
+  final _tokenStorage = const TokenStorage();
   bool _isLoading = false;
+  bool _isGoogleLoading = false;
 
   @override
   void dispose() {
@@ -48,17 +60,36 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   Future<void> _handleLogin() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isLoading = true;
-      });
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
-      // Simulate API call
-      await Future.delayed(const Duration(seconds: 2));
+    if (!AppConfig.hasValidApiBaseUrl) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('กรุณาตั้งค่า API Base URL ก่อนใช้งานการเข้าสู่ระบบ'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
 
-      setState(() {
-        _isLoading = false;
-      });
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final deviceToken = await _getDeviceToken();
+      final authResponse = await _authApi.loginWithEmail(
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+        deviceToken: deviceToken,
+      );
+
+      await _tokenStorage.saveTokens(
+        accessToken: authResponse.token.accessToken,
+        refreshToken: authResponse.token.refreshToken,
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -67,9 +98,116 @@ class _LoginPageState extends State<LoginPage> {
             backgroundColor: AppColors.success,
           ),
         );
+        Navigator.of(
+          context,
+        ).pushReplacement(MaterialPageRoute(builder: (_) => const HomePage()));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('เข้าสู่ระบบไม่สำเร็จ: $error'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<String> _getDeviceToken() async {
+    // TODO: Replace with real device token (FCM/APNs).
+    return 'unknown';
+  }
+
+  Future<void> _handleGoogleLogin() async {
+    if (!AppConfig.hasValidApiBaseUrl) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('กรุณาตั้งค่า API Base URL ก่อนใช้งาน Google Login'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (!AppConfig.hasValidGoogleWebClientId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('กรุณาตั้งค่า Google Web Client ID ให้ถูกต้อง'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    if (Platform.isIOS && !AppConfig.hasValidGoogleIosClientId) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('กรุณาตั้งค่า Google iOS Client ID ให้ถูกต้อง'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isGoogleLoading = true;
+    });
+
+    try {
+      final account = await _googleSignIn.signIn();
+      if (account == null) {
+        return;
       }
 
-      // TODO: Navigate to home page
+      final authCode = account.serverAuthCode;
+      if (authCode == null || authCode.isEmpty) {
+        throw Exception('Missing server auth code');
+      }
+
+      final deviceToken = await _getDeviceToken();
+      final authResponse = await _authApi.loginWithGoogle(
+        authCode: authCode,
+        deviceToken: deviceToken,
+      );
+
+      await _tokenStorage.saveTokens(
+        accessToken: authResponse.token.accessToken,
+        refreshToken: authResponse.token.refreshToken,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('เข้าสู่ระบบด้วย Google สำเร็จ!'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+        Navigator.of(
+          context,
+        ).pushReplacement(MaterialPageRoute(builder: (_) => const HomePage()));
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Google เข้าสู่ระบบไม่สำเร็จ: $error'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isGoogleLoading = false;
+        });
+      }
     }
   }
 
@@ -81,10 +219,9 @@ class _LoginPageState extends State<LoginPage> {
   }
 
   void _handleRegister() {
-    // TODO: Navigate to register page
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('ฟีเจอร์สมัครสมาชิกกำลังพัฒนา')),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const RegisterBasicPage()));
   }
 
   @override
@@ -184,6 +321,14 @@ class _LoginPageState extends State<LoginPage> {
                       ),
 
                       const SizedBox(height: 24),
+
+                      // Google Sign-In Button
+                      CustomButton(
+                        text: 'เข้าสู่ระบบด้วย Google',
+                        onPressed: _handleGoogleLogin,
+                        isLoading: _isGoogleLoading,
+                        isOutlined: true,
+                      ),
 
                       // Register Section
                       Center(
