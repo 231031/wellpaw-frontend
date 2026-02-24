@@ -1,11 +1,214 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:well_paw/core/config/app_config.dart';
 import 'package:well_paw/core/theme/app_colors.dart';
 import 'package:well_paw/core/theme/app_text_styles.dart';
 import 'package:well_paw/core/widgets/custom_button.dart';
+import 'package:well_paw/features/auth/data/models/subscription_models.dart';
+import 'package:well_paw/features/auth/data/services/auth_token_service.dart';
+import 'package:well_paw/features/auth/data/services/subscription_api_service.dart';
+import 'package:well_paw/features/auth/data/storage/token_storage.dart';
+import 'package:well_paw/features/auth/presentation/widgets/stripe_web_controller.dart';
 import 'package:well_paw/features/home/presentation/pages/home_page.dart';
 
-class SubscriptionPlanPage extends StatelessWidget {
+class SubscriptionPlanPage extends StatefulWidget {
   const SubscriptionPlanPage({super.key});
+
+  @override
+  State<SubscriptionPlanPage> createState() => _SubscriptionPlanPageState();
+}
+
+class _SubscriptionPlanPageState extends State<SubscriptionPlanPage> {
+  final _api = SubscriptionApiService();
+  final _tokenService = AuthTokenService();
+  final _tokenStorage = const TokenStorage();
+  final _stripeController = StripeWebController();
+
+  List<SubscriptionPlan> _plans = [];
+  bool _isLoading = true;
+  bool _isProcessing = false;
+  String? _errorMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPlans();
+  }
+
+  Future<void> _loadPlans() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    final isValid = await _tokenService.ensureValidAccessToken();
+    if (!isValid) {
+      setState(() {
+        _errorMessage = 'กรุณาเข้าสู่ระบบใหม่';
+        _isLoading = false;
+      });
+      return;
+    }
+
+    final token = await _tokenStorage.readAccessToken();
+    if (token == null) {
+      setState(() {
+        _errorMessage = 'ไม่พบ access token';
+        _isLoading = false;
+      });
+      return;
+    }
+
+    try {
+      final plans = await _api.fetchPlans(accessToken: token);
+      setState(() {
+        _plans = plans;
+        _isLoading = false;
+      });
+    } catch (error) {
+      setState(() {
+        _errorMessage = error.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _startPlan(SubscriptionPlan plan) async {
+    if (_isProcessing) {
+      return;
+    }
+
+    final token = await _tokenStorage.readAccessToken();
+    if (token == null) {
+      _showSnack('ไม่พบ access token');
+      return;
+    }
+
+    final paymentMethodId = await _collectPaymentMethod();
+    if (paymentMethodId == null || paymentMethodId.isEmpty) {
+      return;
+    }
+
+    setState(() => _isProcessing = true);
+    try {
+      await _api.updatePaymentMethod(
+        accessToken: token,
+        paymentMethodId: paymentMethodId,
+      );
+      final result = await _api.startSubscription(
+        accessToken: token,
+        subscriptionPlanId: plan.id,
+        paymentMethodId: paymentMethodId,
+      );
+      if (result.clientSecret.isEmpty) {
+        throw Exception('ไม่พบ client_secret สำหรับการชำระเงิน');
+      }
+
+      if (!_stripeController.isSupported) {
+        _showSnack('ต้องยืนยันการชำระเงินผ่าน Stripe.js บนเว็บ');
+        return;
+      }
+
+      final confirmed = await _stripeController.confirmCardPayment(
+        clientSecret: result.clientSecret,
+        paymentMethodId: paymentMethodId,
+      );
+      if (!confirmed) {
+        throw Exception('ยืนยันการชำระเงินไม่สำเร็จ');
+      }
+
+      if (mounted) {
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const HomePage()),
+          (route) => false,
+        );
+      }
+    } catch (error) {
+      _showSnack('สมัครแพ็กเกจไม่สำเร็จ: $error');
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessing = false);
+      }
+    }
+  }
+
+  Future<String?> _collectPaymentMethod() async {
+    if (kIsWeb && !AppConfig.hasValidStripePublishableKey) {
+      _showSnack('กรุณาตั้งค่า Stripe publishable key');
+      return null;
+    }
+
+    return showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        final manualController = TextEditingController();
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('เพิ่มวิธีชำระเงิน', style: AppTextStyles.h3),
+              const SizedBox(height: 12),
+              if (_stripeController.isSupported) ...[
+                const Text('กรอกข้อมูลบัตรด้วย Stripe Elements'),
+                const SizedBox(height: 12),
+                StripeCardField(controller: _stripeController),
+                const SizedBox(height: 16),
+                CustomButton(
+                  text: 'สร้างวิธีชำระเงิน',
+                  onPressed: () async {
+                    final id = await _stripeController.createPaymentMethod();
+                    if (!mounted) return;
+                    if (id == null || id.isEmpty) {
+                      _showSnack('สร้าง Payment Method ไม่สำเร็จ');
+                      return;
+                    }
+                    Navigator.of(context).pop(id);
+                  },
+                ),
+              ] else ...[
+                const Text('กรอก payment_method_id เพื่อทดสอบบนมือถือ'),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: manualController,
+                  decoration: const InputDecoration(
+                    hintText: 'pm_123456789',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                CustomButton(
+                  text: 'ยืนยัน',
+                  onPressed: () =>
+                      Navigator.of(context).pop(manualController.text.trim()),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showSnack(String message) {
+    if (!mounted) {
+      return;
+    }
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: AppColors.error),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -22,125 +225,73 @@ class SubscriptionPlanPage extends StatelessWidget {
         title: Text('เลือกแพ็กเกจ', style: AppTextStyles.h3),
       ),
       body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('เลือกแพ็กเกจที่เหมาะกับคุณ', style: AppTextStyles.h3),
-              const SizedBox(height: 6),
-              Text(
-                'เริ่มต้นดูแลสัตว์เลี้ยงของคุณวันนี้',
-                style: AppTextStyles.bodyMedium,
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _errorMessage != null
+            ? Center(
+                child: Text(_errorMessage!, style: AppTextStyles.bodyMedium),
+              )
+            : SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('เลือกแพ็กเกจที่เหมาะกับคุณ', style: AppTextStyles.h3),
+                    const SizedBox(height: 6),
+                    Text(
+                      'เริ่มต้นดูแลสัตว์เลี้ยงของคุณวันนี้',
+                      style: AppTextStyles.bodyMedium,
+                    ),
+                    const SizedBox(height: 16),
+                    ..._plans.asMap().entries.map((entry) {
+                      final plan = entry.value;
+                      final color = entry.key == 0
+                          ? AppColors.planFree
+                          : entry.key == 1
+                          ? AppColors.planBlue
+                          : AppColors.planPink;
+                      final features = plan.features
+                          .map((text) => _PlanFeature(text: text))
+                          .toList();
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: _PlanCard(
+                          title: plan.name,
+                          subtitle: plan.intervalLabel,
+                          price: plan.priceLabel,
+                          priceDetail: plan.priceDetail,
+                          color: color,
+                          buttonText: plan.amount == 0
+                              ? 'เริ่มทดลองใช้ฟรี'
+                              : 'เลือกแพ็กเกจนี้',
+                          isLoading: _isProcessing,
+                          onPressed: () => _startPlan(plan),
+                          features: features,
+                        ),
+                      );
+                    }),
+                    const SizedBox(height: 16),
+                    _InfoNote(
+                      text:
+                          'สามารถยกเลิกหรือเปลี่ยนแพ็กเกจได้ตลอดเวลา\nไม่มีค่าใช้จ่ายเพิ่มเติม',
+                    ),
+                    const SizedBox(height: 16),
+                    Text('คำถามที่พบบ่อย', style: AppTextStyles.h3),
+                    const SizedBox(height: 8),
+                    _FaqItem(
+                      question: 'ทดลองใช้ฟรีแล้วต้องจ่ายเงินไหม?',
+                      answer:
+                          'ไม่ต้องจ่าย! ครบ 7 วันจะหยุดใช้งานอัตโนมัติ สามารถยกเลิกได้ตลอดเวลา',
+                    ),
+                    const SizedBox(height: 12),
+                    _FaqItem(
+                      question: 'ยกเลิกได้ไหม?',
+                      answer:
+                          'ยกเลิกได้ทุกเมื่อ ไม่มีค่าปรับ ใช้งานได้ถึงสิ้นสุดรอบบิล',
+                    ),
+                  ],
+                ),
               ),
-              const SizedBox(height: 16),
-              _PlanCard(
-                title: 'Free Trial',
-                subtitle: 'ทดลองใช้ฟรี',
-                price: 'ฟรี',
-                priceDetail: '7 วันแรก',
-                color: AppColors.planFree,
-                buttonText: 'เริ่มทดลองใช้ฟรี',
-                onPressed: () {
-                  Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(builder: (_) => const HomePage()),
-                    (route) => false,
-                  );
-                },
-                features: const [
-                  _PlanFeature(text: 'สร้างโปรไฟล์สัตว์เลี้ยง 1 ตัว'),
-                  _PlanFeature(text: 'เพิ่มอาหารได้ 3 รายการ'),
-                  _PlanFeature(
-                    text:
-                        'ใช้ฟีเจอร์หลักได้ 1 อย่าง (คำนวณอาหาร, วินิจฉัย, BCS)',
-                  ),
-                  _PlanFeature(text: 'ดูประวัติย้อนหลัง 7 วัน'),
-                  _PlanFeature(text: 'การสนับสนุนพื้นฐาน'),
-                  _PlanFeature(text: 'ไม่มีคำแนะนำโปรไฟล์', enabled: false),
-                  _PlanFeature(
-                    text: 'ไม่มีคำแนะนำในเชิงสุขภาพ',
-                    enabled: false,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              _PlanCard(
-                title: 'Premium',
-                subtitle: 'รายเดือน',
-                price: '69',
-                priceDetail: 'บาท/เดือน',
-                color: AppColors.planBlue,
-                buttonText: 'เลือกแพ็กเกจนี้',
-                onPressed: () {
-                  Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(builder: (_) => const HomePage()),
-                    (route) => false,
-                  );
-                },
-                features: const [
-                  _PlanFeature(text: 'สร้างโปรไฟล์สัตว์เลี้ยงไม่จำกัด'),
-                  _PlanFeature(text: 'เพิ่มอาหารไม่จำกัด'),
-                  _PlanFeature(text: 'ใช้ฟีเจอร์หลักไม่จำกัด'),
-                  _PlanFeature(text: 'ดูประวัติย้อนหลังไม่จำกัด'),
-                  _PlanFeature(text: 'AI วิเคราะห์ขั้นสูง'),
-                  _PlanFeature(text: 'คำแนะนำเฉพาะบุคคล'),
-                  _PlanFeature(text: 'รายงานสุขภาพรายเดือน'),
-                  _PlanFeature(text: 'การสนับสนุนแบบ Priority'),
-                  _PlanFeature(text: 'ปรึกษาสัตวแพทย์ออนไลน์'),
-                  _PlanFeature(text: 'ส่วนลด 20% สินค้าพาร์ทเนอร์'),
-                ],
-              ),
-              const SizedBox(height: 16),
-              _PlanCard(
-                title: 'Premium',
-                subtitle: 'รายปี',
-                price: '690',
-                priceDetail: 'บาท/ปี',
-                badgeText: 'แนะนำ',
-                discountText: 'ประหยัด 17%',
-                color: AppColors.planPink,
-                buttonText: 'เลือกแพ็กเกจนี้',
-                onPressed: () {
-                  Navigator.of(context).pushAndRemoveUntil(
-                    MaterialPageRoute(builder: (_) => const HomePage()),
-                    (route) => false,
-                  );
-                },
-                features: const [
-                  _PlanFeature(text: 'สร้างโปรไฟล์สัตว์เลี้ยงไม่จำกัด'),
-                  _PlanFeature(text: 'เพิ่มอาหารไม่จำกัด'),
-                  _PlanFeature(text: 'ใช้ฟีเจอร์หลักไม่จำกัด'),
-                  _PlanFeature(text: 'ดูประวัติย้อนหลังไม่จำกัด'),
-                  _PlanFeature(text: 'AI วิเคราะห์ขั้นสูง'),
-                  _PlanFeature(text: 'คำแนะนำเฉพาะบุคคล'),
-                  _PlanFeature(text: 'รายงานสุขภาพรายเดือน'),
-                  _PlanFeature(text: 'การสนับสนุนแบบ Priority'),
-                  _PlanFeature(text: 'ปรึกษาสัตวแพทย์ออนไลน์'),
-                  _PlanFeature(text: 'ส่วนลด 20% สินค้าพาร์ทเนอร์'),
-                ],
-              ),
-              const SizedBox(height: 16),
-              _InfoNote(
-                text:
-                    'สามารถยกเลิกหรือเปลี่ยนแพ็กเกจได้ตลอดเวลา\nไม่มีค่าใช้จ่ายเพิ่มเติม',
-              ),
-              const SizedBox(height: 16),
-              Text('คำถามที่พบบ่อย', style: AppTextStyles.h3),
-              const SizedBox(height: 8),
-              _FaqItem(
-                question: 'ทดลองใช้ฟรีแล้วต้องจ่ายเงินไหม?',
-                answer:
-                    'ไม่ต้องจ่าย! ครบ 7 วันจะหยุดใช้งานอัตโนมัติ สามารถยกเลิกได้ตลอดเวลา',
-              ),
-              const SizedBox(height: 12),
-              _FaqItem(
-                question: 'ยกเลิกได้ไหม?',
-                answer:
-                    'ยกเลิกได้ทุกเมื่อ ไม่มีค่าปรับ ใช้งานได้ถึงสิ้นสุดรอบบิล',
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -154,6 +305,7 @@ class _PlanCard extends StatelessWidget {
   final String buttonText;
   final VoidCallback onPressed;
   final Color color;
+  final bool isLoading;
   final String? badgeText;
   final String? discountText;
   final List<_PlanFeature> features;
@@ -167,6 +319,7 @@ class _PlanCard extends StatelessWidget {
     required this.onPressed,
     required this.color,
     required this.features,
+    required this.isLoading,
     this.badgeText,
     this.discountText,
   });
@@ -329,7 +482,11 @@ class _PlanCard extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 12),
-                CustomButton(text: buttonText, onPressed: onPressed),
+                CustomButton(
+                  text: buttonText,
+                  onPressed: onPressed,
+                  isLoading: isLoading,
+                ),
               ],
             ),
           ),

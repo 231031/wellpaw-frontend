@@ -4,10 +4,10 @@ import 'dart:io';
 
 import 'package:http/http.dart' as http;
 import 'package:well_paw/core/config/app_config.dart';
-import 'package:well_paw/features/auth/data/models/auth_models.dart';
+import 'package:well_paw/features/profile/data/models/pet_models.dart';
 
-class AuthApiService {
-  AuthApiService({http.Client? client}) : _client = client ?? http.Client();
+class PetApiService {
+  PetApiService({http.Client? client}) : _client = client ?? http.Client();
 
   final http.Client _client;
 
@@ -57,86 +57,25 @@ class AuthApiService {
     return Exception('Request failed (${response.statusCode})');
   }
 
-  Future<AuthResponse> loginWithEmail({
-    required String email,
-    required String password,
-    String? deviceToken,
+  Future<void> createPet({
+    required String accessToken,
+    required CreatePetPayload payload,
   }) async {
-    final uri = Uri.parse('${AppConfig.apiBaseUrl}/auth/login');
-    final payload = <String, dynamic>{'email': email, 'password': password};
-    if (deviceToken != null && deviceToken.isNotEmpty) {
-      payload['device_token'] = deviceToken;
-    }
-
+    final uri = Uri.parse('${AppConfig.apiBaseUrl}/pet');
+    final requestBody = jsonEncode(payload.toJson());
+    // Debug: log payload
+    // ignore: avoid_print
+    print('POST /pet payload: $requestBody');
     late final http.Response response;
     try {
       response = await _client
           .post(
             uri,
-            headers: const {'Content-Type': 'application/json'},
-            body: jsonEncode(payload),
-          )
-          .timeout(const Duration(seconds: 15));
-    } on TimeoutException {
-      throw Exception('เชื่อมต่อเซิร์ฟเวอร์ช้าเกินไป กรุณาลองใหม่อีกครั้ง');
-    } on SocketException {
-      throw Exception(
-        'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาตรวจสอบว่า backend ทำงานอยู่',
-      );
-    }
-
-    final body = _decodeJsonMap(response);
-    if (response.statusCode != 200) {
-      throw _buildHttpException(response, body);
-    }
-
-    return AuthResponse.fromJson(body);
-  }
-
-  Future<RegisterResponse> registerAccount({
-    required String fullName,
-    required String email,
-    required String password,
-    String? deviceToken,
-    bool notiFood = false,
-    bool notiCalendars = false,
-    bool foodFree = false,
-    bool foodPlanFree = false,
-    bool bcsFree = false,
-    bool diseaseFree = false,
-  }) async {
-    final uri = Uri.parse('${AppConfig.apiBaseUrl}/auth/register');
-    final trimmed = fullName.trim();
-    final parts = trimmed.split(RegExp(r'\s+'));
-    final firstName = parts.isNotEmpty ? parts.first : '';
-    final lastName = parts.length > 1 ? parts.sublist(1).join(' ') : '';
-    int flag(bool value) => value ? 1 : 0;
-    final resolvedDeviceToken =
-        (deviceToken != null && deviceToken.trim().isNotEmpty)
-        ? deviceToken
-        : 'unknown';
-
-    final payload = <String, dynamic>{
-      'first_name': firstName,
-      'last_name': lastName,
-      'email': email,
-      'password': password,
-      'device_token': resolvedDeviceToken,
-      'noti_food': notiFood,
-      'noti_calendars': notiCalendars,
-      'food_free': flag(foodFree),
-      'food_plan_free': flag(foodPlanFree),
-      'bcs_free': flag(bcsFree),
-      'disease_free': flag(diseaseFree),
-    };
-
-    late final http.Response response;
-    try {
-      response = await _client
-          .post(
-            uri,
-            headers: const {'Content-Type': 'application/json'},
-            body: jsonEncode(payload),
+            headers: {
+              'Authorization': 'Bearer $accessToken',
+              'Content-Type': 'application/json',
+            },
+            body: requestBody,
           )
           .timeout(const Duration(seconds: 15));
     } on TimeoutException {
@@ -151,25 +90,27 @@ class AuthApiService {
     if (response.statusCode != 200 && response.statusCode != 201) {
       throw _buildHttpException(response, body);
     }
-
-    return RegisterResponse.fromJson(body);
   }
 
-  Future<AuthResponse> loginWithGoogle({
-    required String authCode,
-    required String deviceToken,
+  Future<void> updatePetInfo({
+    required String accessToken,
+    required PetInfoPayload payload,
   }) async {
-    final uri = Uri.parse('${AppConfig.apiBaseUrl}/auth/login/google');
+    final uri = Uri.parse('${AppConfig.apiBaseUrl}/pet/info');
+    final requestBody = jsonEncode(payload.toJson());
+    // Debug: log payload
+    // ignore: avoid_print
+    print('PATCH /pet/info payload: $requestBody');
     late final http.Response response;
     try {
       response = await _client
-          .post(
+          .patch(
             uri,
-            headers: const {'Content-Type': 'application/json'},
-            body: jsonEncode({
-              'auth_code': authCode,
-              'device_token': deviceToken,
-            }),
+            headers: {
+              'Authorization': 'Bearer $accessToken',
+              'Content-Type': 'application/json',
+            },
+            body: requestBody,
           )
           .timeout(const Duration(seconds: 15));
     } on TimeoutException {
@@ -184,19 +125,27 @@ class AuthApiService {
     if (response.statusCode != 200) {
       throw _buildHttpException(response, body);
     }
-
-    return AuthResponse.fromJson(body);
   }
 
-  Future<TokenPair> refreshTokens({required String refreshToken}) async {
-    final uri = Uri.parse('${AppConfig.apiBaseUrl}/auth/refreshtoken');
+  Future<void> updatePetDetail({
+    required String accessToken,
+    required PetDetailPayload payload,
+  }) async {
+    final uri = Uri.parse('${AppConfig.apiBaseUrl}/pet/detail');
+    final requestBody = jsonEncode(payload.toJson());
+    // Debug: log payload
+    // ignore: avoid_print
+    print('POST /pet/detail payload: $requestBody');
     late final http.Response response;
     try {
       response = await _client
           .post(
             uri,
-            headers: const {'Content-Type': 'application/json'},
-            body: jsonEncode({'refresh_token': refreshToken}),
+            headers: {
+              'Authorization': 'Bearer $accessToken',
+              'Content-Type': 'application/json',
+            },
+            body: requestBody,
           )
           .timeout(const Duration(seconds: 15));
     } on TimeoutException {
@@ -211,31 +160,35 @@ class AuthApiService {
     if (response.statusCode != 200) {
       throw _buildHttpException(response, body);
     }
-
-    return _parseTokenPair(body);
   }
 
-  TokenPair _parseTokenPair(Map<String, dynamic> body) {
-    final data = body['data'];
-    if (data is Map<String, dynamic>) {
-      final token = data['token'];
-      if (token is Map<String, dynamic>) {
-        return TokenPair.fromJson(token);
-      }
-    }
-
-    final token = body['token'];
-    if (token is Map<String, dynamic>) {
-      return TokenPair.fromJson(token);
-    }
-
-    if (body['access_token'] != null && body['refresh_token'] != null) {
-      return TokenPair(
-        accessToken: body['access_token'] as String,
-        refreshToken: body['refresh_token'] as String,
+  Future<void> deletePet({
+    required String accessToken,
+    required int petId,
+  }) async {
+    final uri = Uri.parse('${AppConfig.apiBaseUrl}/pet/$petId');
+    late final http.Response response;
+    try {
+      response = await _client
+          .delete(
+            uri,
+            headers: {
+              'Authorization': 'Bearer $accessToken',
+              'Content-Type': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 15));
+    } on TimeoutException {
+      throw Exception('เชื่อมต่อเซิร์ฟเวอร์ช้าเกินไป กรุณาลองใหม่อีกครั้ง');
+    } on SocketException {
+      throw Exception(
+        'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาตรวจสอบว่า backend ทำงานอยู่',
       );
     }
 
-    throw Exception('Invalid token response');
+    final body = _decodeJsonMap(response);
+    if (response.statusCode != 200) {
+      throw _buildHttpException(response, body);
+    }
   }
 }

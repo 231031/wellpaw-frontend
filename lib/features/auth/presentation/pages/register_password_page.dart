@@ -107,9 +107,10 @@ class _RegisterPasswordPageState extends State<RegisterPasswordPage> {
             backgroundColor: AppColors.success,
           ),
         );
-        Navigator.of(
-          context,
-        ).push(MaterialPageRoute(builder: (_) => const SubscriptionPlanPage()));
+        Navigator.of(context).pushAndRemoveUntil(
+          MaterialPageRoute(builder: (_) => const SubscriptionPlanPage()),
+          (route) => false,
+        );
       }
     } catch (error) {
       if (mounted) {
