@@ -11,6 +11,65 @@ class UserApiService {
 
   final http.Client _client;
 
+  bool? _asBool(dynamic value) {
+    if (value is bool) {
+      return value;
+    }
+    if (value is num) {
+      return value != 0;
+    }
+    if (value is String) {
+      final lower = value.trim().toLowerCase();
+      if (lower == 'true' || lower == '1' || lower == 'on' || lower == 'yes') {
+        return true;
+      }
+      if (lower == 'false' || lower == '0' || lower == 'off' || lower == 'no') {
+        return false;
+      }
+    }
+    return null;
+  }
+
+  bool? _extractBoolFromMap(Map<String, dynamic> map) {
+    const candidates = <String>[
+      'enabled',
+      'is_enabled',
+      'notification_enabled',
+      'calendar_notification',
+      'calendar_notifications',
+      'status',
+      'value',
+      'toggle',
+      'active',
+      'is_active',
+    ];
+
+    for (final key in candidates) {
+      final parsed = _asBool(map[key]);
+      if (parsed != null) {
+        return parsed;
+      }
+    }
+
+    final data = map['data'];
+    if (data is Map<String, dynamic>) {
+      final fromData = _extractBoolFromMap(data);
+      if (fromData != null) {
+        return fromData;
+      }
+    }
+
+    final result = map['result'];
+    if (result is Map<String, dynamic>) {
+      final fromResult = _extractBoolFromMap(result);
+      if (fromResult != null) {
+        return fromResult;
+      }
+    }
+
+    return null;
+  }
+
   Map<String, dynamic> _decodeJsonMap(http.Response response) {
     final contentType = response.headers['content-type'] ?? '';
     if (!contentType.contains('application/json')) {
@@ -115,5 +174,37 @@ class UserApiService {
     }
 
     return null;
+  }
+
+  Future<bool?> toggleCalendarNotification({
+    required String accessToken,
+  }) async {
+    final uri = Uri.parse('${AppConfig.apiBaseUrl}/user/notification/calendar');
+
+    late final http.Response response;
+    try {
+      response = await _client
+          .get(
+            uri,
+            headers: {
+              'Authorization': 'Bearer $accessToken',
+              'Content-Type': 'application/json',
+            },
+          )
+          .timeout(const Duration(seconds: 15));
+    } on TimeoutException {
+      throw Exception('เชื่อมต่อเซิร์ฟเวอร์ช้าเกินไป กรุณาลองใหม่อีกครั้ง');
+    } on SocketException {
+      throw Exception(
+        'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ กรุณาตรวจสอบว่า backend ทำงานอยู่',
+      );
+    }
+
+    final body = _decodeJsonMap(response);
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw _buildHttpException(response, body);
+    }
+
+    return _extractBoolFromMap(body);
   }
 }

@@ -92,11 +92,12 @@ class _RegisterPasswordPageState extends State<RegisterPasswordPage> {
         deviceToken: deviceToken,
       );
 
-      final token = registerResponse.token;
-      if (token != null) {
+      final registerToken = registerResponse.token;
+      if (registerToken != null) {
+        await _tokenStorage.clear();
         await _tokenStorage.saveTokens(
-          accessToken: token.accessToken,
-          refreshToken: token.refreshToken,
+          accessToken: registerToken.accessToken,
+          refreshToken: registerToken.refreshToken,
         );
       }
 
@@ -108,7 +109,14 @@ class _RegisterPasswordPageState extends State<RegisterPasswordPage> {
           ),
         );
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const SubscriptionPlanPage()),
+          MaterialPageRoute(
+            builder: (_) => SubscriptionPlanPage(
+              registeredEmail: widget.email,
+              registeredPassword: _passwordController.text,
+              bootstrapAccessToken: registerResponse.token?.accessToken,
+              bootstrapRefreshToken: registerResponse.token?.refreshToken,
+            ),
+          ),
           (route) => false,
         );
       }

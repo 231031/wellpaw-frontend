@@ -8,13 +8,17 @@ import 'package:well_paw/core/theme/app_text_styles.dart';
 import 'package:well_paw/core/widgets/custom_button.dart';
 import 'package:well_paw/core/widgets/custom_text_field.dart';
 import 'package:well_paw/features/auth/data/storage/token_storage.dart';
+import 'package:well_paw/features/profile/presentation/pages/bcs_detailed_analysis_page.dart';
 import 'package:well_paw/features/profile/data/services/pet_api_service.dart';
 import 'package:well_paw/features/profile/data/models/pet_models.dart';
 
+enum PetDetailFocusSection { weight, bcs, activity }
+
 class PetDetailPage extends StatefulWidget {
   final PetProfileData pet;
+  final PetDetailFocusSection? focusSection;
 
-  const PetDetailPage({super.key, required this.pet});
+  const PetDetailPage({super.key, required this.pet, this.focusSection});
 
   @override
   State<PetDetailPage> createState() => _PetDetailPageState();
@@ -28,6 +32,9 @@ class _PetDetailPageState extends State<PetDetailPage> {
   final _birthdayController = TextEditingController();
   final _bcsController = TextEditingController();
   final _gestationDateController = TextEditingController();
+  final _weightSectionKey = GlobalKey();
+  final _bcsSectionKey = GlobalKey();
+  final _activitySectionKey = GlobalKey();
 
   final _tokenStorage = const TokenStorage();
   final _petApi = PetApiService();
@@ -45,25 +52,90 @@ class _PetDetailPageState extends State<PetDetailPage> {
   DateTime? _bcsUpdatedAt;
   int _activityIndex = 2;
   bool _isSaving = false;
+  bool _isLoadingAnalysis = false;
+  String? _analysisError;
+  String? _remoteImageUrl;
 
   @override
   void initState() {
     super.initState();
     _nameController.addListener(_refreshHeader);
-    _nameController.text = widget.pet.name;
-    _breedController.text = widget.pet.breed;
-    _weightController.text = widget.pet.weight;
-    _birthdayController.text = widget.pet.birthDate;
-    _bcsController.text = '2';
-    _petType = widget.pet.type;
-    _gender = widget.pet.gender;
+    _applyPetProfile(widget.pet);
+    _loadLatestPetProfile();
+    _loadPetAnalysis();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _scrollToFocusedSection();
+    });
+  }
+
+  void _scrollToFocusedSection() {
+    final focusSection = widget.focusSection;
+    if (focusSection == null || !mounted) {
+      return;
+    }
+
+    final key = switch (focusSection) {
+      PetDetailFocusSection.weight => _weightSectionKey,
+      PetDetailFocusSection.bcs => _bcsSectionKey,
+      PetDetailFocusSection.activity => _activitySectionKey,
+    };
+
+    final context = key.currentContext;
+    if (context == null) {
+      return;
+    }
+
+    Scrollable.ensureVisible(
+      context,
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+      alignment: 0.15,
+    );
+  }
+
+  void _applyPetProfile(PetProfileData pet) {
+    _nameController.text = pet.name;
+    _breedController.text = pet.breed;
+    _weightController.text = pet.weight;
+    _birthdayController.text = pet.birthDate;
+    _remoteImageUrl = pet.imagePath;
+    _petType = pet.type;
+    _gender = pet.gender;
     _neutered = false;
     _lactation = false;
     _gestation = false;
-    _activityLevel = 'ปกติ';
-    _activityIndex = 2;
-    _bcsValue = int.tryParse(_bcsController.text.trim())?.clamp(0, 4) ?? 2;
+    _activityIndex = ((pet.activityLevel ?? 2).clamp(0, 3) as int);
+    _activityLevel = _mapActivityLevelLabel(_activityIndex);
+    _bcsValue = ((pet.bcs ?? 2).clamp(0, 4) as int);
+    _bcsController.text = _bcsValue.toString();
     _bcsUpdatedAt = DateTime.now();
+  }
+
+  Future<void> _loadLatestPetProfile() async {
+    if (!AppConfig.hasValidApiBaseUrl) {
+      return;
+    }
+
+    try {
+      final accessToken = await _tokenStorage.readAccessToken();
+      if (accessToken == null || accessToken.isEmpty) {
+        return;
+      }
+
+      final latest = await _petApi.fetchPetById(
+        accessToken: accessToken,
+        petId: widget.pet.id,
+      );
+      if (!mounted || latest == null) {
+        return;
+      }
+
+      setState(() {
+        _applyPetProfile(latest);
+      });
+    } catch (_) {
+      // Keep existing local values when latest fetch fails.
+    }
   }
 
   @override
@@ -222,6 +294,112 @@ class _PetDetailPageState extends State<PetDetailPage> {
     }
   }
 
+  String _mapActivityLevelLabel(int value) {
+    switch (value) {
+      case 0:
+        return 'น้อยมาก';
+      case 1:
+        return 'น้อย';
+      case 3:
+        return 'สูง';
+      default:
+        return 'ปกติ';
+    }
+  }
+
+  String _formatWeight(double value) {
+    if (value % 1 == 0) {
+      return value.toInt().toString();
+    }
+    return value.toStringAsFixed(1);
+  }
+
+  String _normalizeDateText(String dateText) {
+    final trimmed = dateText.trim();
+    if (trimmed.isEmpty) {
+      return trimmed;
+    }
+    return trimmed.length >= 10 ? trimmed.substring(0, 10) : trimmed;
+  }
+
+  Future<void> _loadPetAnalysis() async {
+    if (!AppConfig.hasValidApiBaseUrl) {
+      return;
+    }
+
+    setState(() {
+      _isLoadingAnalysis = true;
+      _analysisError = null;
+    });
+
+    try {
+      final accessToken = await _tokenStorage.readAccessToken();
+      if (accessToken == null || accessToken.isEmpty) {
+        throw Exception('ไม่พบโทเคนสำหรับเข้าสู่ระบบ');
+      }
+
+      final analysis = await _petApi.fetchPetAnalysis(
+        accessToken: accessToken,
+        petId: widget.pet.id,
+      );
+
+      if (!mounted) return;
+
+      if (analysis != null) {
+        setState(() {
+          if (analysis.weight != null) {
+            _weightController.text = _formatWeight(analysis.weight!);
+          }
+
+          if (analysis.activityLevel != null) {
+            _activityIndex = (analysis.activityLevel!.clamp(0, 3) as int);
+            _activityLevel = _mapActivityLevelLabel(_activityIndex);
+          }
+
+          if (analysis.bcs != null) {
+            _bcsValue = (analysis.bcs!.clamp(0, 4) as int);
+            _bcsController.text = _bcsValue.toString();
+            _bcsUpdatedAt = DateTime.now();
+          }
+
+          if (analysis.neutered != null) {
+            _neutered = analysis.neutered!;
+          }
+
+          if (analysis.lactation != null) {
+            _lactation = analysis.lactation!;
+          }
+
+          if (analysis.gestation != null) {
+            _gestation = analysis.gestation!;
+          }
+
+          if (analysis.gestationStartDate != null &&
+              analysis.gestationStartDate!.trim().isNotEmpty) {
+            _gestationDateController.text = _normalizeDateText(
+              analysis.gestationStartDate!,
+            );
+          }
+
+          if (analysis.imagePath != null && analysis.imagePath!.isNotEmpty) {
+            _remoteImageUrl = analysis.imagePath;
+          }
+        });
+      }
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _analysisError = 'ไม่สามารถโหลดข้อมูลวิเคราะห์ได้: $error';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingAnalysis = false;
+        });
+      }
+    }
+  }
+
   String _bcsLabel(int value) {
     switch (value) {
       case 0:
@@ -282,12 +460,23 @@ class _PetDetailPageState extends State<PetDetailPage> {
       return;
     }
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('โหมดคำนวณแบบละเอียดกำลังพัฒนา'),
-        backgroundColor: AppColors.warning,
+    final selected = await Navigator.of(context).push<int>(
+      MaterialPageRoute(
+        builder: (_) =>
+            BcsDetailedAnalysisPage(petType: _petType, initial: _bcsValue ?? 2),
       ),
     );
+
+    if (selected != null) {
+      _setBcs(selected);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('บันทึกผลการวิเคราะห์ BCS แล้ว'),
+          backgroundColor: AppColors.success,
+        ),
+      );
+    }
   }
 
   Future<void> _selectActivityLevel() async {
@@ -376,6 +565,9 @@ class _PetDetailPageState extends State<PetDetailPage> {
         accessToken: accessToken,
         payload: detailPayload,
       );
+
+      await _loadLatestPetProfile();
+      await _loadPetAnalysis();
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -468,11 +660,27 @@ class _PetDetailPageState extends State<PetDetailPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                if (_isLoadingAnalysis)
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 16),
+                    child: LinearProgressIndicator(),
+                  )
+                else if (_analysisError != null)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Text(
+                      _analysisError!,
+                      style: AppTextStyles.bodySmall.copyWith(
+                        color: AppColors.warning,
+                      ),
+                    ),
+                  ),
                 _PetHeaderCard(name: _nameController.text),
                 const SizedBox(height: 24),
                 Center(
                   child: _ImagePickerAvatar(
                     imageFile: _petImage,
+                    imageUrl: _remoteImageUrl,
                     onTap: _showImageSourceSheet,
                   ),
                 ),
@@ -528,28 +736,39 @@ class _PetDetailPageState extends State<PetDetailPage> {
                   validator: _validateRequired,
                 ),
                 const SizedBox(height: 20),
-                CustomTextField(
-                  label: 'น้ำหนัก (กก.)',
-                  hintText: 'เช่น 4.2',
-                  prefixIcon: Icons.monitor_weight_outlined,
-                  controller: _weightController,
-                  keyboardType: TextInputType.number,
-                  validator: _validateWeight,
+                Container(
+                  key: _weightSectionKey,
+                  child: CustomTextField(
+                    label: 'น้ำหนัก (กก.)',
+                    hintText: 'เช่น 4.2',
+                    prefixIcon: Icons.monitor_weight_outlined,
+                    controller: _weightController,
+                    keyboardType: TextInputType.number,
+                    validator: _validateWeight,
+                  ),
                 ),
                 const SizedBox(height: 20),
-                _BcsSummaryCard(
-                  valueLabel: _bcsValue != null ? _bcsLabel(_bcsValue!) : null,
-                  statusLabel: _bcsValue != null
-                      ? _bcsThaiStatus(_bcsValue!)
-                      : null,
-                  updatedAt: _bcsUpdatedAt,
-                  onCalculate: _openBcsCalculator,
+                Container(
+                  key: _bcsSectionKey,
+                  child: _BcsSummaryCard(
+                    valueLabel: _bcsValue != null
+                        ? _bcsLabel(_bcsValue!)
+                        : null,
+                    statusLabel: _bcsValue != null
+                        ? _bcsThaiStatus(_bcsValue!)
+                        : null,
+                    updatedAt: _bcsUpdatedAt,
+                    onCalculate: _openBcsCalculator,
+                  ),
                 ),
                 const SizedBox(height: 20),
-                _ActivitySelector(
-                  label: 'ระดับกิจกรรม',
-                  value: _activityLevel,
-                  onTap: _selectActivityLevel,
+                Container(
+                  key: _activitySectionKey,
+                  child: _ActivitySelector(
+                    label: 'ระดับกิจกรรม',
+                    value: _activityLevel,
+                    onTap: _selectActivityLevel,
+                  ),
                 ),
                 const SizedBox(height: 20),
                 _NeuteredSelector(
@@ -799,9 +1018,14 @@ class _ToggleCard extends StatelessWidget {
 
 class _ImagePickerAvatar extends StatelessWidget {
   final File? imageFile;
+  final String? imageUrl;
   final VoidCallback onTap;
 
-  const _ImagePickerAvatar({required this.imageFile, required this.onTap});
+  const _ImagePickerAvatar({
+    required this.imageFile,
+    required this.imageUrl,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -826,13 +1050,7 @@ class _ImagePickerAvatar extends StatelessWidget {
         child: Stack(
           alignment: Alignment.center,
           children: [
-            if (imageFile == null)
-              const Icon(
-                Icons.camera_alt_outlined,
-                color: AppColors.iconGray,
-                size: 32,
-              )
-            else
+            if (imageFile != null)
               ClipOval(
                 child: Image.file(
                   imageFile!,
@@ -840,6 +1058,26 @@ class _ImagePickerAvatar extends StatelessWidget {
                   height: 106,
                   fit: BoxFit.cover,
                 ),
+              ),
+            if (imageFile == null && imageUrl != null && imageUrl!.isNotEmpty)
+              ClipOval(
+                child: Image.network(
+                  imageUrl!,
+                  width: 106,
+                  height: 106,
+                  fit: BoxFit.cover,
+                  errorBuilder: (_, __, ___) => const Icon(
+                    Icons.camera_alt_outlined,
+                    color: AppColors.iconGray,
+                    size: 32,
+                  ),
+                ),
+              ),
+            if (imageFile == null && (imageUrl == null || imageUrl!.isEmpty))
+              const Icon(
+                Icons.camera_alt_outlined,
+                color: AppColors.iconGray,
+                size: 32,
               ),
             Positioned(
               bottom: 6,

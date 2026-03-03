@@ -4,15 +4,27 @@ import 'package:well_paw/core/config/app_config.dart';
 import 'package:well_paw/core/theme/app_colors.dart';
 import 'package:well_paw/core/theme/app_text_styles.dart';
 import 'package:well_paw/core/widgets/custom_button.dart';
+import 'package:well_paw/features/auth/data/services/auth_api_service.dart';
 import 'package:well_paw/features/auth/data/models/subscription_models.dart';
 import 'package:well_paw/features/auth/data/services/auth_token_service.dart';
 import 'package:well_paw/features/auth/data/services/subscription_api_service.dart';
 import 'package:well_paw/features/auth/data/storage/token_storage.dart';
 import 'package:well_paw/features/auth/presentation/widgets/stripe_web_controller.dart';
-import 'package:well_paw/features/home/presentation/pages/home_page.dart';
+import 'package:well_paw/features/onboarding/presentation/pages/welcome_flow_page.dart';
 
 class SubscriptionPlanPage extends StatefulWidget {
-  const SubscriptionPlanPage({super.key});
+  const SubscriptionPlanPage({
+    super.key,
+    this.registeredEmail,
+    this.registeredPassword,
+    this.bootstrapAccessToken,
+    this.bootstrapRefreshToken,
+  });
+
+  final String? registeredEmail;
+  final String? registeredPassword;
+  final String? bootstrapAccessToken;
+  final String? bootstrapRefreshToken;
 
   @override
   State<SubscriptionPlanPage> createState() => _SubscriptionPlanPageState();
@@ -20,6 +32,7 @@ class SubscriptionPlanPage extends StatefulWidget {
 
 class _SubscriptionPlanPageState extends State<SubscriptionPlanPage> {
   final _api = SubscriptionApiService();
+  final _authApi = AuthApiService();
   final _tokenService = AuthTokenService();
   final _tokenStorage = const TokenStorage();
   final _stripeController = StripeWebController();
@@ -28,11 +41,34 @@ class _SubscriptionPlanPageState extends State<SubscriptionPlanPage> {
   bool _isLoading = true;
   bool _isProcessing = false;
   String? _errorMessage;
+  String? _workingAccessToken;
+
+  static const bool _navigateToWelcomeImmediately = true;
 
   @override
   void initState() {
     super.initState();
+    _workingAccessToken = widget.bootstrapAccessToken;
     _loadPlans();
+  }
+
+  bool _hasText(String? value) => value != null && value.trim().isNotEmpty;
+
+  Future<String?> _resolveAccessToken() async {
+    if (_hasText(_workingAccessToken)) {
+      return _workingAccessToken;
+    }
+
+    final isValid = await _tokenService.ensureValidAccessToken();
+    if (!isValid) {
+      return null;
+    }
+
+    final token = await _tokenStorage.readAccessToken();
+    if (_hasText(token)) {
+      _workingAccessToken = token;
+    }
+    return token;
   }
 
   Future<void> _loadPlans() async {
@@ -41,26 +77,17 @@ class _SubscriptionPlanPageState extends State<SubscriptionPlanPage> {
       _errorMessage = null;
     });
 
-    final isValid = await _tokenService.ensureValidAccessToken();
-    if (!isValid) {
+    final token = await _resolveAccessToken();
+    if (!_hasText(token)) {
       setState(() {
-        _errorMessage = 'กรุณาเข้าสู่ระบบใหม่';
-        _isLoading = false;
-      });
-      return;
-    }
-
-    final token = await _tokenStorage.readAccessToken();
-    if (token == null) {
-      setState(() {
-        _errorMessage = 'ไม่พบ access token';
+        _errorMessage = 'ไม่พบสิทธิ์การสมัครแพ็กเกจ กรุณาลงทะเบียนใหม่';
         _isLoading = false;
       });
       return;
     }
 
     try {
-      final plans = await _api.fetchPlans(accessToken: token);
+      final plans = await _api.fetchPlans(accessToken: token!);
       setState(() {
         _plans = plans;
         _isLoading = false;
@@ -78,48 +105,136 @@ class _SubscriptionPlanPageState extends State<SubscriptionPlanPage> {
       return;
     }
 
-    final token = await _tokenStorage.readAccessToken();
-    if (token == null) {
-      _showSnack('ไม่พบ access token');
+    if (_navigateToWelcomeImmediately) {
+      setState(() => _isProcessing = true);
+      try {
+        String? accessTokenToSave = widget.bootstrapAccessToken;
+        String? refreshTokenToSave = widget.bootstrapRefreshToken;
+
+        if ((!_hasText(accessTokenToSave) || !_hasText(refreshTokenToSave)) &&
+            _hasText(widget.registeredEmail) &&
+            _hasText(widget.registeredPassword)) {
+          final auth = await _authApi.loginWithEmail(
+            email: widget.registeredEmail!.trim(),
+            password: widget.registeredPassword!,
+            deviceToken: 'unknown',
+          );
+          accessTokenToSave = auth.token.accessToken;
+          refreshTokenToSave = auth.token.refreshToken;
+        }
+
+        if (!_hasText(accessTokenToSave) || !_hasText(refreshTokenToSave)) {
+          throw Exception('ไม่พบโทเคนของบัญชีที่เพิ่งสมัคร');
+        }
+
+        await _tokenStorage.clear();
+        await _tokenStorage.saveTokens(
+          accessToken: accessTokenToSave!,
+          refreshToken: refreshTokenToSave!,
+        );
+        _workingAccessToken = accessTokenToSave;
+
+        if (mounted) {
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const WelcomeFlowPage()),
+            (route) => false,
+          );
+        }
+      } catch (error) {
+        _showSnack('ไม่สามารถเข้าสู่ระบบบัญชีใหม่ได้: $error');
+      } finally {
+        if (mounted) {
+          setState(() => _isProcessing = false);
+        }
+      }
       return;
     }
 
-    final paymentMethodId = await _collectPaymentMethod();
-    if (paymentMethodId == null || paymentMethodId.isEmpty) {
+    final accessToken = await _resolveAccessToken();
+    if (!_hasText(accessToken)) {
+      _showSnack('ไม่พบสิทธิ์การสมัครแพ็กเกจ');
       return;
+    }
+
+    String? paymentMethodId;
+    final isPaidPlan = plan.amount > 0;
+    final bypassMobilePaymentForTesting = isPaidPlan && !kIsWeb;
+
+    if (bypassMobilePaymentForTesting) {
+      _showSnack('โหมดทดสอบบนมือถือ: ข้ามขั้นตอนชำระเงินชั่วคราว');
+    }
+
+    if (isPaidPlan && !bypassMobilePaymentForTesting) {
+      paymentMethodId = await _collectPaymentMethod();
+      if (!_hasText(paymentMethodId)) {
+        return;
+      }
     }
 
     setState(() => _isProcessing = true);
     try {
-      await _api.updatePaymentMethod(
-        accessToken: token,
-        paymentMethodId: paymentMethodId,
-      );
+      if (_hasText(paymentMethodId)) {
+        await _api.updatePaymentMethod(
+          accessToken: accessToken!,
+          paymentMethodId: paymentMethodId!,
+        );
+      }
+
       final result = await _api.startSubscription(
-        accessToken: token,
+        accessToken: accessToken!,
         subscriptionPlanId: plan.id,
         paymentMethodId: paymentMethodId,
       );
-      if (result.clientSecret.isEmpty) {
-        throw Exception('ไม่พบ client_secret สำหรับการชำระเงิน');
+
+      if (isPaidPlan && !bypassMobilePaymentForTesting) {
+        if (result.clientSecret.isEmpty) {
+          throw Exception('ไม่พบ client_secret สำหรับการชำระเงิน');
+        }
+
+        if (!_stripeController.isSupported) {
+          _showSnack('ต้องยืนยันการชำระเงินผ่าน Stripe.js บนเว็บ');
+          return;
+        }
+
+        final confirmed = await _stripeController.confirmCardPayment(
+          clientSecret: result.clientSecret,
+          paymentMethodId: paymentMethodId!,
+        );
+        if (!confirmed) {
+          throw Exception('ยืนยันการชำระเงินไม่สำเร็จ');
+        }
       }
 
-      if (!_stripeController.isSupported) {
-        _showSnack('ต้องยืนยันการชำระเงินผ่าน Stripe.js บนเว็บ');
-        return;
+      String? accessTokenToSave = result.accessToken;
+      String? refreshTokenToSave = result.refreshToken;
+
+      if (!_hasText(accessTokenToSave) || !_hasText(refreshTokenToSave)) {
+        if (_hasText(widget.registeredEmail) &&
+            _hasText(widget.registeredPassword)) {
+          final auth = await _authApi.loginWithEmail(
+            email: widget.registeredEmail!.trim(),
+            password: widget.registeredPassword!,
+            deviceToken: 'unknown',
+          );
+          accessTokenToSave = auth.token.accessToken;
+          refreshTokenToSave = auth.token.refreshToken;
+        }
       }
 
-      final confirmed = await _stripeController.confirmCardPayment(
-        clientSecret: result.clientSecret,
-        paymentMethodId: paymentMethodId,
+      if (!_hasText(accessTokenToSave) || !_hasText(refreshTokenToSave)) {
+        throw Exception(
+          'ไม่พบ access token / refresh token หลังสมัครแพ็กเกจสำเร็จ',
+        );
+      }
+
+      await _tokenStorage.saveTokens(
+        accessToken: accessTokenToSave!,
+        refreshToken: refreshTokenToSave!,
       );
-      if (!confirmed) {
-        throw Exception('ยืนยันการชำระเงินไม่สำเร็จ');
-      }
 
       if (mounted) {
         Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (_) => const HomePage()),
+          MaterialPageRoute(builder: (_) => const WelcomeFlowPage()),
           (route) => false,
         );
       }

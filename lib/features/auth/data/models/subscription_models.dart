@@ -90,12 +90,25 @@ class SubscriptionPlan {
 
 class StartSubscriptionResult {
   final String clientSecret;
+  final String? accessToken;
+  final String? refreshToken;
 
-  const StartSubscriptionResult({required this.clientSecret});
+  const StartSubscriptionResult({
+    required this.clientSecret,
+    this.accessToken,
+    this.refreshToken,
+  });
+
+  bool get hasTokenPair {
+    return (accessToken != null && accessToken!.isNotEmpty) &&
+        (refreshToken != null && refreshToken!.isNotEmpty);
+  }
 
   factory StartSubscriptionResult.fromJson(Map<String, dynamic> json) {
     return StartSubscriptionResult(
       clientSecret: json['client_secret']?.toString() ?? '',
+      accessToken: json['access_token']?.toString(),
+      refreshToken: json['refresh_token']?.toString(),
     );
   }
 }

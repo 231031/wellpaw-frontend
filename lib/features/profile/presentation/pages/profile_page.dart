@@ -5,8 +5,12 @@ import 'package:well_paw/core/theme/app_colors.dart';
 import 'package:well_paw/features/auth/data/models/auth_models.dart';
 import 'package:well_paw/features/auth/data/storage/token_storage.dart';
 import 'package:well_paw/features/auth/presentation/pages/login_page.dart';
+import 'package:well_paw/features/activity/presentation/pages/activity_page.dart';
+import 'package:well_paw/features/food/presentation/pages/food_home_page.dart';
+import 'package:well_paw/features/health/presentation/pages/health_page.dart';
 import 'package:well_paw/features/home/presentation/pages/home_page.dart';
 import 'package:well_paw/features/profile/data/models/pet_models.dart';
+import 'package:well_paw/features/profile/data/services/pet_api_service.dart';
 import 'package:well_paw/features/profile/data/services/user_api_service.dart';
 import 'package:well_paw/features/profile/presentation/pages/create_pet_profile_page.dart';
 import 'package:well_paw/features/profile/presentation/pages/pet_detail_page.dart';
@@ -21,14 +25,22 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage> {
   final _tokenStorage = const TokenStorage();
   final _userApi = UserApiService();
+  final _petApi = PetApiService();
   bool _isLoadingUser = true;
+  bool _isLoadingPets = true;
   String? _userError;
+  String? _petsError;
   AuthUser? _user;
+  List<PetProfileData> _pets = const [];
 
   @override
   void initState() {
     super.initState();
-    _loadUser();
+    _loadProfileData();
+  }
+
+  Future<void> _loadProfileData() async {
+    await Future.wait([_loadUser(), _loadPets()]);
   }
 
   Future<void> _loadUser() async {
@@ -62,6 +74,42 @@ class _ProfilePageState extends State<ProfilePage> {
       setState(() {
         _isLoadingUser = false;
         _userError = 'ไม่สามารถดึงข้อมูลผู้ใช้ได้: $error';
+      });
+    }
+  }
+
+  Future<void> _loadPets() async {
+    if (!AppConfig.hasValidApiBaseUrl) {
+      setState(() {
+        _isLoadingPets = false;
+        _petsError = 'กรุณาตั้งค่า API Base URL ก่อนใช้งานข้อมูลสัตว์เลี้ยง';
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoadingPets = true;
+      _petsError = null;
+    });
+
+    try {
+      final accessToken = await _tokenStorage.readAccessToken();
+      if (accessToken == null || accessToken.isEmpty) {
+        throw Exception('ไม่พบโทเคนสำหรับเข้าสู่ระบบ');
+      }
+
+      final pets = await _petApi.fetchMyPets(accessToken: accessToken);
+      if (!mounted) return;
+
+      setState(() {
+        _pets = pets;
+        _isLoadingPets = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _isLoadingPets = false;
+        _petsError = 'ไม่สามารถดึงข้อมูลสัตว์เลี้ยงได้: $error';
       });
     }
   }
@@ -160,34 +208,52 @@ class _ProfilePageState extends State<ProfilePage> {
                         ),
                       ),
                       _AddPetButton(
-                        onTap: () {
-                          Navigator.of(context).push(
+                        onTap: () async {
+                          await Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (_) => const CreatePetProfilePage(),
                             ),
                           );
+                          if (mounted) {
+                            _loadPets();
+                          }
                         },
                       ),
                     ],
                   ),
                   const SizedBox(height: 16),
-                  ..._mockPets
-                      .map(
-                        (pet) => Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: _PetCard(
-                            pet: pet,
-                            onTap: () {
-                              Navigator.of(context).push(
-                                MaterialPageRoute(
-                                  builder: (_) => PetDetailPage(pet: pet),
-                                ),
-                              );
-                            },
+                  if (_isLoadingPets)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: CircularProgressIndicator(),
+                      ),
+                    )
+                  else if (_petsError != null)
+                    _PetsErrorCard(errorText: _petsError!, onRetry: _loadPets)
+                  else if (_pets.isEmpty)
+                    const _EmptyPetsCard()
+                  else
+                    ..._pets
+                        .map(
+                          (pet) => Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _PetCard(
+                              pet: pet,
+                              onTap: () async {
+                                await Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => PetDetailPage(pet: pet),
+                                  ),
+                                );
+                                if (mounted) {
+                                  _loadPets();
+                                }
+                              },
+                            ),
                           ),
-                        ),
-                      )
-                      .toList(),
+                        )
+                        .toList(),
                   const SizedBox(height: 8),
                   Text(
                     '💡 คลิกที่การ์ดเพื่อดูและแก้ไขรายละเอียดสัตว์เลี้ยง',
@@ -221,6 +287,18 @@ class _ProfilePageState extends State<ProfilePage> {
             Navigator.of(context).pushAndRemoveUntil(
               MaterialPageRoute(builder: (_) => const HomePage()),
               (route) => false,
+            );
+          } else if (index == 1) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => const FoodHomePage()),
+            );
+          } else if (index == 2) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => const HealthPage()),
+            );
+          } else if (index == 3) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (_) => const ActivityPage()),
             );
           }
         },
@@ -409,7 +487,19 @@ class _PetCard extends StatelessWidget {
                 color: _ProfileColors.background,
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: const Icon(Icons.pets, color: _ProfileColors.primaryBlue),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: pet.imagePath == null
+                    ? const Icon(Icons.pets, color: _ProfileColors.primaryBlue)
+                    : Image.network(
+                        pet.imagePath!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.pets,
+                          color: _ProfileColors.primaryBlue,
+                        ),
+                      ),
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -430,6 +520,52 @@ class _PetCard extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _PetsErrorCard extends StatelessWidget {
+  final String errorText;
+  final VoidCallback onRetry;
+
+  const _PetsErrorCard({required this.errorText, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _ProfileColors.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(errorText, style: _ProfileText.caption),
+          const SizedBox(height: 8),
+          TextButton(onPressed: onRetry, child: const Text('ลองใหม่')),
+        ],
+      ),
+    );
+  }
+}
+
+class _EmptyPetsCard extends StatelessWidget {
+  const _EmptyPetsCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _ProfileColors.cardBorder),
+      ),
+      child: Text('ยังไม่มีสัตว์เลี้ยงในบัญชีนี้', style: _ProfileText.body),
     );
   }
 }
@@ -575,36 +711,3 @@ class _ProfileBottomNav extends StatelessWidget {
     );
   }
 }
-
-const _mockPets = [
-  PetProfileData(
-    id: 1,
-    name: 'มิโกะ',
-    weightLabel: '4.2 kg',
-    type: 'สุนัข',
-    breed: 'ชิวาวา',
-    gender: 'ตัวเมีย',
-    birthDate: '2021-07-12',
-    weight: '4.2',
-  ),
-  PetProfileData(
-    id: 2,
-    name: 'โมโม่',
-    weightLabel: '3.8 kg',
-    type: 'แมว',
-    breed: 'เปอร์เซีย',
-    gender: 'ตัวผู้',
-    birthDate: '2020-10-05',
-    weight: '3.8',
-  ),
-  PetProfileData(
-    id: 3,
-    name: 'โคโค่',
-    weightLabel: '5.1 kg',
-    type: 'สุนัข',
-    breed: 'ปอมเมอเรเนียน',
-    gender: 'ตัวผู้',
-    birthDate: '2019-02-22',
-    weight: '5.1',
-  ),
-];

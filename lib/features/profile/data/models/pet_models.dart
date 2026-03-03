@@ -62,6 +62,7 @@ class PetInfoPayload {
   Map<String, dynamic> toJson() {
     final map = <String, dynamic>{
       'id': petId,
+      'pet_id': petId,
       'name': name.trim(),
       'type': type,
       'breed': breed.trim(),
@@ -100,6 +101,9 @@ class PetProfileData {
   final String gender;
   final String birthDate;
   final String weight;
+  final String? imagePath;
+  final int? activityLevel;
+  final int? bcs;
 
   const PetProfileData({
     required this.id,
@@ -110,5 +114,30 @@ class PetProfileData {
     required this.gender,
     required this.birthDate,
     required this.weight,
+    this.imagePath,
+    this.activityLevel,
+    this.bcs,
+  });
+}
+
+class PetAnalysisData {
+  final double? weight;
+  final int? activityLevel;
+  final int? bcs;
+  final bool? neutered;
+  final bool? lactation;
+  final bool? gestation;
+  final String? gestationStartDate;
+  final String? imagePath;
+
+  const PetAnalysisData({
+    this.weight,
+    this.activityLevel,
+    this.bcs,
+    this.neutered,
+    this.lactation,
+    this.gestation,
+    this.gestationStartDate,
+    this.imagePath,
   });
 }

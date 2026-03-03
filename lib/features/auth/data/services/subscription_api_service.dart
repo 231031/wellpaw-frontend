@@ -85,9 +85,15 @@ class SubscriptionApiService {
   Future<StartSubscriptionResult> startSubscription({
     required String accessToken,
     required String subscriptionPlanId,
-    required String paymentMethodId,
+    String? paymentMethodId,
   }) async {
     final uri = Uri.parse('${AppConfig.apiBaseUrl}/user/subscription/start');
+    final payload = <String, dynamic>{
+      'subscription_plan_id': subscriptionPlanId,
+    };
+    if (paymentMethodId != null && paymentMethodId.trim().isNotEmpty) {
+      payload['payment_method_id'] = paymentMethodId.trim();
+    }
     late final http.Response response;
     try {
       response = await _client
@@ -97,10 +103,7 @@ class SubscriptionApiService {
               'Authorization': 'Bearer $accessToken',
               'Content-Type': 'application/json',
             },
-            body: jsonEncode({
-              'subscription_plan_id': subscriptionPlanId,
-              'payment_method_id': paymentMethodId,
-            }),
+            body: jsonEncode(payload),
           )
           .timeout(const Duration(seconds: 15));
     } on TimeoutException {
@@ -118,10 +121,31 @@ class SubscriptionApiService {
 
     final data = body['data'];
     if (data is Map<String, dynamic>) {
-      return StartSubscriptionResult.fromJson(data);
+      final merged = <String, dynamic>{...data};
+
+      final token = data['token'];
+      if (token is Map<String, dynamic>) {
+        merged['access_token'] =
+            token['access_token']?.toString() ?? merged['access_token'];
+        merged['refresh_token'] =
+            token['refresh_token']?.toString() ?? merged['refresh_token'];
+      }
+
+      if (body['access_token'] != null) {
+        merged['access_token'] = body['access_token']?.toString();
+      }
+      if (body['refresh_token'] != null) {
+        merged['refresh_token'] = body['refresh_token']?.toString();
+      }
+
+      return StartSubscriptionResult.fromJson(merged);
     }
 
-    return const StartSubscriptionResult(clientSecret: '');
+    return StartSubscriptionResult(
+      clientSecret: '',
+      accessToken: body['access_token']?.toString(),
+      refreshToken: body['refresh_token']?.toString(),
+    );
   }
 
   Map<String, dynamic> _decodeJson(String raw) {
