@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:well_paw/core/config/app_config.dart';
 import 'package:well_paw/core/theme/app_colors.dart';
 import 'package:well_paw/core/theme/app_text_styles.dart';
+import 'package:well_paw/core/theme/app_typography.dart';
 import 'package:well_paw/features/activity/presentation/pages/activity_page.dart';
 import 'package:well_paw/features/auth/data/storage/token_storage.dart';
 import 'package:well_paw/features/food/presentation/pages/food_home_page.dart';
@@ -51,6 +52,11 @@ class _HomeColors {
     end: Alignment.bottomCenter,
     colors: [Color(0xFF4CAF50), Color(0xFF66BB6A)],
   );
+  static const LinearGradient actionActivityGradient = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [Color(0xFF4CAF50), Color(0xFF66BB6A)],
+  );
   static const LinearGradient actionWeightGradient = LinearGradient(
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
@@ -65,80 +71,80 @@ class _HomeColors {
 
 class _HomeTextStyles {
   static TextStyle welcomeTitle = GoogleFonts.sarabun(
-    fontSize: 24,
+    fontSize: AppTypography.headline,
     fontWeight: FontWeight.w600,
     color: Colors.white,
     height: 1.33,
   );
   static TextStyle welcomeSubtitle = GoogleFonts.sarabun(
-    fontSize: 16,
+    fontSize: AppTypography.body,
     fontWeight: FontWeight.w400,
     color: Colors.white,
     height: 1.4,
   );
   static TextStyle petNameSelected = GoogleFonts.sarabun(
-    fontSize: 14,
+    fontSize: AppTypography.bodyCompact,
     fontWeight: FontWeight.w400,
     color: _HomeColors.petPink,
   );
   static TextStyle petName = GoogleFonts.sarabun(
-    fontSize: 14,
+    fontSize: AppTypography.bodyCompact,
     fontWeight: FontWeight.w400,
     color: _HomeColors.textSecondary,
   );
   static TextStyle summaryValue(Color color) => GoogleFonts.sarabun(
-    fontSize: 24,
+    fontSize: AppTypography.headline,
     fontWeight: FontWeight.w700,
     color: color,
     height: 1.33,
   );
   static TextStyle summaryUnit = GoogleFonts.sarabun(
-    fontSize: 12,
+    fontSize: AppTypography.caption,
     fontWeight: FontWeight.w400,
     color: _HomeColors.textSecondary,
   );
   static TextStyle summaryCaption = GoogleFonts.sarabun(
-    fontSize: 12,
+    fontSize: AppTypography.caption,
     fontWeight: FontWeight.w400,
     color: _HomeColors.textHint,
   );
   static TextStyle buttonLabel = GoogleFonts.sarabun(
-    fontSize: 14,
+    fontSize: AppTypography.body,
     fontWeight: FontWeight.w500,
     color: Colors.white,
   );
   static TextStyle sectionTitle = GoogleFonts.sarabun(
-    fontSize: 20,
+    fontSize: AppTypography.subheading,
     fontWeight: FontWeight.w600,
     color: _HomeColors.primaryBlue,
   );
   static TextStyle sectionSubtitle = GoogleFonts.sarabun(
-    fontSize: 14,
+    fontSize: AppTypography.bodyCompact,
     fontWeight: FontWeight.w400,
     color: _HomeColors.textSecondary,
   );
   static TextStyle cardTitle = GoogleFonts.sarabun(
-    fontSize: 18,
+    fontSize: AppTypography.subheading,
     fontWeight: FontWeight.w500,
     color: _HomeColors.primaryBlue,
   );
   static TextStyle body = GoogleFonts.sarabun(
-    fontSize: 14,
+    fontSize: AppTypography.body,
     fontWeight: FontWeight.w400,
     color: _HomeColors.textSecondary,
   );
   static TextStyle bodyStrong(Color color) => GoogleFonts.sarabun(
-    fontSize: 16,
+    fontSize: AppTypography.body,
     fontWeight: FontWeight.w400,
     color: color,
   );
   static TextStyle valueMedium = GoogleFonts.sarabun(
-    fontSize: 16,
+    fontSize: AppTypography.body,
     fontWeight: FontWeight.w400,
     color: _HomeColors.primaryBlue,
   );
-  static TextStyle chartLabel = GoogleFonts.inter(
-    fontSize: 12,
+  static TextStyle chartLabel = GoogleFonts.sarabun(
+    fontSize: AppTypography.caption,
     fontWeight: FontWeight.w400,
     color: _HomeColors.textHint,
   );
@@ -879,41 +885,47 @@ class _QuickActionsRow extends StatelessWidget {
                         ),
                       ],
                     ),
-                    child: Stack(
-                      children: [
-                        Column(
-                          children: [
-                            const SizedBox(height: 6),
-                            Icon(item.icon, color: Colors.white, size: 22),
-                            const SizedBox(height: 8),
-                            Text(
-                              item.label,
-                              style: _HomeTextStyles.buttonLabel,
-                            ),
-                          ],
-                        ),
-                        if (item.showBadge)
-                          Positioned(
-                            top: 0,
-                            right: 0,
-                            child: Container(
-                              width: 18,
-                              height: 18,
-                              decoration: BoxDecoration(
-                                color: _HomeColors.badgeOrange,
-                                borderRadius: BorderRadius.circular(9),
+                    child: SizedBox(
+                      width: double.infinity,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              Icon(item.icon, color: Colors.white, size: 22),
+                              const SizedBox(height: 8),
+                              Text(
+                                item.label,
+                                textAlign: TextAlign.center,
+                                style: _HomeTextStyles.buttonLabel,
                               ),
-                              child: Center(
-                                child: Text(
-                                  '!',
-                                  style: _HomeTextStyles.summaryValue(
-                                    Colors.white,
-                                  ).copyWith(fontSize: 12),
+                            ],
+                          ),
+                          if (item.showBadge)
+                            Positioned(
+                              top: -2,
+                              right: -2,
+                              child: Container(
+                                width: 18,
+                                height: 18,
+                                decoration: BoxDecoration(
+                                  color: _HomeColors.badgeOrange,
+                                  borderRadius: BorderRadius.circular(9),
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    '!',
+                                    style: _HomeTextStyles.summaryValue(
+                                      Colors.white,
+                                    ).copyWith(fontSize: 12),
+                                  ),
                                 ),
                               ),
                             ),
-                          ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -1886,22 +1898,22 @@ class HomeMockData {
 
   static const quickActions = <QuickActionItem>[
     QuickActionItem(
-      label: 'อัพเดตระดับกิจกรรม',
-      icon: Icons.directions_run,
-      background: _HomeColors.actionAddMealGradient,
-      showBadge: false,
-    ),
-    QuickActionItem(
-      label: 'อัพเดตน้ำหนัก',
+      label: 'อัพเดต\nน้ำหนัก',
       icon: Icons.monitor_weight_outlined,
       background: _HomeColors.actionWeightGradient,
       showBadge: true,
     ),
     QuickActionItem(
-      label: 'ประเมิน BCS',
+      label: 'ประเมิน\nBCS',
       icon: Icons.favorite_border,
       background: _HomeColors.actionBcsGradient,
       showBadge: true,
+    ),
+    QuickActionItem(
+      label: 'อัพเดต\nระดับกิจกรรม',
+      icon: Icons.directions_run,
+      background: _HomeColors.actionActivityGradient,
+      showBadge: false,
     ),
   ];
 

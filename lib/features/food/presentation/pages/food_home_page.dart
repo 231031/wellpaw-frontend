@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:well_paw/core/config/app_config.dart';
 import 'package:well_paw/core/theme/app_colors.dart';
+import 'package:well_paw/core/theme/app_typography.dart';
 import 'package:well_paw/features/auth/data/storage/token_storage.dart';
 import 'package:well_paw/features/food/data/models/food_plan_models.dart';
 import 'package:well_paw/features/food/data/services/food_plan_api_service.dart';
@@ -315,7 +316,7 @@ class _FoodHomePageState extends State<FoodHomePage> {
                           child: Text(
                             'แผนอาหารปัจจุบัน',
                             style: TextStyle(
-                              fontSize: 30,
+                              fontSize: AppTypography.headline,
                               fontWeight: FontWeight.w600,
                               color: AppColors.primaryBlueDark,
                             ),
@@ -439,7 +440,7 @@ class _NoPetReadyState extends StatelessWidget {
               'ระบบยังไม่พร้อมใช้งาน กรุณาเพิ่มสัตว์เลี้ยงก่อน',
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 20,
+                fontSize: AppTypography.subheading,
                 fontWeight: FontWeight.w600,
                 color: AppColors.primaryBlueDark,
               ),
@@ -504,7 +505,7 @@ class _FoodHeader extends StatelessWidget {
                     Text(
                       'อาหาร',
                       style: TextStyle(
-                        fontSize: 34,
+                        fontSize: AppTypography.headline,
                         fontWeight: FontWeight.w600,
                         color: Colors.white,
                       ),
@@ -512,7 +513,10 @@ class _FoodHeader extends StatelessWidget {
                     SizedBox(height: 4),
                     Text(
                       'Food & Nutrition',
-                      style: TextStyle(fontSize: 21, color: Colors.white),
+                      style: TextStyle(
+                        fontSize: AppTypography.subheading,
+                        color: Colors.white,
+                      ),
                     ),
                   ],
                 ),
@@ -544,7 +548,7 @@ class _FoodHeader extends StatelessWidget {
                   onTap: () => onSelect(index),
                 );
               },
-              separatorBuilder: (_, __) => const SizedBox(width: 12),
+              separatorBuilder: (context, index) => const SizedBox(width: 12),
               itemCount: pets.length,
             ),
           ),
@@ -604,13 +608,14 @@ class _PetAvatarChip extends StatelessWidget {
                       : Image.network(
                           imageUrl!,
                           fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            color: const Color(0xFFD6E1EF),
-                            child: const Icon(
-                              Icons.pets,
-                              color: AppColors.primaryBlue,
-                            ),
-                          ),
+                          errorBuilder: (context, error, stackTrace) =>
+                              Container(
+                                color: const Color(0xFFD6E1EF),
+                                child: const Icon(
+                                  Icons.pets,
+                                  color: AppColors.primaryBlue,
+                                ),
+                              ),
                         ),
                 ),
               ),
@@ -644,7 +649,7 @@ class _PetAvatarChip extends StatelessWidget {
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 13,
+                fontSize: AppTypography.bodyCompact,
                 color: isSelected
                     ? const Color(0xFFE895D0)
                     : const Color(0xFF666666),
@@ -707,7 +712,7 @@ class _CurrentPlanCard extends StatelessWidget {
                         'แผนอาหารปัจจุบัน',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 28,
+                          fontSize: AppTypography.subheading,
                           fontWeight: FontWeight.w700,
                         ),
                       ),
@@ -724,7 +729,10 @@ class _CurrentPlanCard extends StatelessWidget {
                 ),
                 const Text(
                   'Current Meal Plan',
-                  style: TextStyle(color: Color(0xFFE5EDFA), fontSize: 18),
+                  style: TextStyle(
+                    color: Color(0xFFE5EDFA),
+                    fontSize: AppTypography.body,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Container(
@@ -756,7 +764,7 @@ class _CurrentPlanCard extends StatelessWidget {
                               planName,
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 30,
+                                fontSize: AppTypography.headline,
                                 fontWeight: FontWeight.w500,
                               ),
                             ),
@@ -773,7 +781,7 @@ class _CurrentPlanCard extends StatelessWidget {
                                   startDate,
                                   style: const TextStyle(
                                     color: Color(0xFFE8EFFA),
-                                    fontSize: 18,
+                                    fontSize: AppTypography.body,
                                   ),
                                 ),
                               ],
@@ -887,7 +895,7 @@ class _FoodItemRow extends StatelessWidget {
                 Text(
                   title,
                   style: const TextStyle(
-                    fontSize: 16,
+                    fontSize: AppTypography.body,
                     fontWeight: FontWeight.w500,
                     color: AppColors.primaryBlueDark,
                   ),
@@ -895,7 +903,7 @@ class _FoodItemRow extends StatelessWidget {
                 Text(
                   subtitle,
                   style: const TextStyle(
-                    fontSize: 13,
+                    fontSize: AppTypography.bodyCompact,
                     color: Color(0xFF94A3B8),
                   ),
                 ),
@@ -908,7 +916,7 @@ class _FoodItemRow extends StatelessWidget {
               Text(
                 amount,
                 style: const TextStyle(
-                  fontSize: 16,
+                  fontSize: AppTypography.body,
                   fontWeight: FontWeight.w600,
                   color: AppColors.primaryBlueDark,
                 ),
@@ -927,7 +935,7 @@ class _FoodItemRow extends StatelessWidget {
                   Text(
                     percent,
                     style: const TextStyle(
-                      fontSize: 12,
+                      fontSize: AppTypography.caption,
                       color: Color(0xFF64748B),
                     ),
                   ),
@@ -973,14 +981,17 @@ class _MacroTile extends StatelessWidget {
           Text(
             value,
             style: const TextStyle(
-              fontSize: 16,
+              fontSize: AppTypography.body,
               fontWeight: FontWeight.w600,
               color: AppColors.primaryBlueDark,
             ),
           ),
           Text(
             label,
-            style: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+            style: const TextStyle(
+              fontSize: AppTypography.caption,
+              color: Color(0xFF94A3B8),
+            ),
           ),
         ],
       ),
@@ -1009,7 +1020,7 @@ class _PerformanceTile extends StatelessWidget {
           const Text(
             'ผลประสิทธิภาพของแผน',
             style: TextStyle(
-              fontSize: 22,
+              fontSize: AppTypography.subheading,
               fontWeight: FontWeight.w600,
               color: AppColors.primaryBlueDark,
             ),
@@ -1022,7 +1033,10 @@ class _PerformanceTile extends StatelessWidget {
               ),
               child: Text(
                 '✓ ${entry.value}',
-                style: const TextStyle(fontSize: 16, color: Color(0xFF475569)),
+                style: const TextStyle(
+                  fontSize: AppTypography.body,
+                  color: Color(0xFF475569),
+                ),
               ),
             ),
           ),
@@ -1058,7 +1072,7 @@ class _InventorySection extends StatelessWidget {
           const Text(
             'คลังอาหาร (Inventory)',
             style: TextStyle(
-              fontSize: 34,
+              fontSize: AppTypography.headline,
               fontWeight: FontWeight.w600,
               color: AppColors.primaryBlueDark,
             ),
@@ -1152,14 +1166,14 @@ class _InventoryTile extends StatelessWidget {
                   Text(
                     title,
                     style: const TextStyle(
-                      fontSize: 18,
+                      fontSize: AppTypography.body,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
                   Text(
                     count,
                     style: const TextStyle(
-                      fontSize: 14,
+                      fontSize: AppTypography.bodyCompact,
                       color: Color(0xFF64748B),
                     ),
                   ),
@@ -1225,7 +1239,7 @@ class _PrimaryActionButton extends StatelessWidget {
             Text(
               text,
               style: TextStyle(
-                fontSize: 15,
+                fontSize: AppTypography.body,
                 fontWeight: FontWeight.w500,
                 color: isOutlined ? AppColors.primaryBlue : Colors.white,
               ),

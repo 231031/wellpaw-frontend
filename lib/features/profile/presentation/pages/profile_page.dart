@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:well_paw/core/config/app_config.dart';
 import 'package:well_paw/core/theme/app_colors.dart';
+import 'package:well_paw/core/theme/app_typography.dart';
 import 'package:well_paw/features/auth/data/models/auth_models.dart';
 import 'package:well_paw/features/auth/data/storage/token_storage.dart';
 import 'package:well_paw/features/auth/presentation/pages/login_page.dart';
@@ -320,37 +321,37 @@ class _ProfileColors {
 
 class _ProfileText {
   static final h1 = GoogleFonts.sarabun(
-    fontSize: 24,
+    fontSize: AppTypography.headline,
     fontWeight: FontWeight.w600,
     color: Colors.white,
   );
   static final sub = GoogleFonts.sarabun(
-    fontSize: 16,
+    fontSize: AppTypography.body,
     fontWeight: FontWeight.w400,
     color: Colors.white,
   );
   static final sectionTitle = GoogleFonts.sarabun(
-    fontSize: 16,
+    fontSize: AppTypography.subheading,
     fontWeight: FontWeight.w600,
     color: _ProfileColors.textPrimary,
   );
   static final cardTitle = GoogleFonts.sarabun(
-    fontSize: 16,
+    fontSize: AppTypography.subheading,
     fontWeight: FontWeight.w600,
     color: _ProfileColors.textPrimary,
   );
   static final body = GoogleFonts.sarabun(
-    fontSize: 14,
+    fontSize: AppTypography.body,
     fontWeight: FontWeight.w400,
     color: _ProfileColors.textSecondary,
   );
   static final caption = GoogleFonts.sarabun(
-    fontSize: 12,
+    fontSize: AppTypography.caption,
     fontWeight: FontWeight.w400,
     color: _ProfileColors.textHint,
   );
   static final logout = GoogleFonts.sarabun(
-    fontSize: 16,
+    fontSize: AppTypography.body,
     fontWeight: FontWeight.w400,
     color: _ProfileColors.logout,
   );

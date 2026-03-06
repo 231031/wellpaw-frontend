@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:well_paw/core/theme/app_colors.dart';
+import 'package:well_paw/core/theme/app_typography.dart';
 import 'package:well_paw/features/activity/presentation/pages/activity_create_event_page.dart';
 import 'package:well_paw/features/auth/data/storage/token_storage.dart';
 import 'package:well_paw/features/food/presentation/pages/food_home_page.dart';
@@ -23,7 +24,6 @@ class _ActivityPageState extends State<ActivityPage> {
   final _userApi = UserApiService();
 
   bool _isLoading = true;
-  bool _isUpdatingActivity = false;
   bool _isTogglingCalendar = false;
   String? _error;
 
@@ -38,19 +38,6 @@ class _ActivityPageState extends State<ActivityPage> {
       return null;
     }
     return _pets[_selectedPetIndex];
-  }
-
-  int _normalizedActivityLevel(int? value) {
-    if (value == null) {
-      return 2;
-    }
-    if (value >= 0 && value <= 3) {
-      return value;
-    }
-    if (value >= 1 && value <= 4) {
-      return value - 1;
-    }
-    return 2;
   }
 
   @override
@@ -87,94 +74,6 @@ class _ActivityPageState extends State<ActivityPage> {
         _isLoading = false;
         _error = 'โหลดข้อมูลกิจกรรมไม่สำเร็จ: $e';
       });
-    }
-  }
-
-  String _activityLabel(int level) {
-    switch (level) {
-      case 0:
-        return 'น้อยมาก';
-      case 1:
-        return 'น้อย';
-      case 2:
-        return 'ปกติ';
-      case 3:
-        return 'สูง';
-      default:
-        return 'ปกติ';
-    }
-  }
-
-  double _parseWeight(PetProfileData pet) {
-    final text = pet.weight.trim();
-    final parsed = double.tryParse(text.replaceAll(',', '.'));
-    if (parsed != null && parsed > 0) {
-      return parsed;
-    }
-    final fallback = pet.weightLabel.toLowerCase().replaceAll('kg', '').trim();
-    return double.tryParse(fallback.replaceAll(',', '.')) ?? 0;
-  }
-
-  Future<void> _updateActivityLevel(int newLevel) async {
-    final pet = _selectedPet;
-    if (pet == null || _isUpdatingActivity) {
-      return;
-    }
-
-    setState(() {
-      _isUpdatingActivity = true;
-    });
-
-    try {
-      final token = await _tokenStorage.readAccessToken();
-      if (token == null || token.isEmpty) {
-        throw Exception('ไม่พบโทเคนสำหรับเข้าสู่ระบบ');
-      }
-
-      final analysis = await _petApi.fetchPetAnalysis(
-        accessToken: token,
-        petId: pet.id,
-      );
-
-      final weight = (analysis?.weight ?? _parseWeight(pet));
-      if (weight <= 0) {
-        throw Exception('ไม่พบค่าน้ำหนักของสัตว์เลี้ยงสำหรับอัปเดตกิจกรรม');
-      }
-
-      await _petApi.updatePetDetail(
-        accessToken: token,
-        payload: PetDetailPayload(
-          petId: pet.id,
-          weight: weight,
-          activityLevel: newLevel,
-          bcs: analysis?.bcs ?? pet.bcs ?? 2,
-          neutered: analysis?.neutered ?? false,
-          lactation: analysis?.lactation,
-          gestation: analysis?.gestation,
-          gestationStartDate: analysis?.gestationStartDate,
-        ),
-      );
-
-      await _load();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            'อัปเดตระดับกิจกรรมเป็น ${_activityLabel(newLevel)} แล้ว',
-          ),
-        ),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('อัปเดตกิจกรรมไม่สำเร็จ: $e')));
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isUpdatingActivity = false;
-        });
-      }
     }
   }
 
@@ -260,11 +159,6 @@ class _ActivityPageState extends State<ActivityPage> {
 
   @override
   Widget build(BuildContext context) {
-    final selectedPet = _selectedPet;
-    final selectedActivity = _normalizedActivityLevel(
-      selectedPet?.activityLevel,
-    );
-
     return Scaffold(
       backgroundColor: const Color(0xFFEDEFF4),
       body: SafeArea(
@@ -286,7 +180,8 @@ class _ActivityPageState extends State<ActivityPage> {
                       padding: EdgeInsets.symmetric(horizontal: 24),
                       child: _CalendarCard(
                         selectedDate: _selectedCalendarDate,
-                        onAddPressed: _openCreateEvent,
+                        onAddPressed: (date) =>
+                            _openCreateEvent(initialDate: date),
                         onDateTap: (date) {
                           setState(() {
                             _selectedCalendarDate = DateTime(
@@ -297,22 +192,6 @@ class _ActivityPageState extends State<ActivityPage> {
                           });
                           _openCreateEvent(initialDate: date);
                         },
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 24),
-                      child: _ActivityControlCard(
-                        pets: _pets,
-                        selectedPetIndex: _selectedPetIndex,
-                        selectedActivity: selectedActivity,
-                        isUpdating: _isUpdatingActivity,
-                        onSelectPet: (index) {
-                          setState(() {
-                            _selectedPetIndex = index;
-                          });
-                        },
-                        onSelectActivity: _updateActivityLevel,
                       ),
                     ),
                     const SizedBox(height: 18),
@@ -395,21 +274,24 @@ class _ActivityHeader extends StatelessWidget {
                   'ปฏิทิน',
                   style: TextStyle(
                     color: Colors.white,
-                    fontSize: 44,
+                    fontSize: AppTypography.headline,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
                 const SizedBox(height: 2),
                 const Text(
                   'Calendar & Events',
-                  style: TextStyle(color: Color(0xFFDCE6FA), fontSize: 16),
+                  style: TextStyle(
+                    color: Color(0xFFDCE6FA),
+                    fontSize: AppTypography.body,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Text(
                   statusText,
                   style: const TextStyle(
                     color: Color(0xFFE9EFFB),
-                    fontSize: 14,
+                    fontSize: AppTypography.bodyCompact,
                   ),
                 ),
               ],
@@ -449,105 +331,6 @@ class _ActivityHeader extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _ActivityControlCard extends StatelessWidget {
-  const _ActivityControlCard({
-    required this.pets,
-    required this.selectedPetIndex,
-    required this.selectedActivity,
-    required this.isUpdating,
-    required this.onSelectPet,
-    required this.onSelectActivity,
-  });
-
-  final List<PetProfileData> pets;
-  final int selectedPetIndex;
-  final int selectedActivity;
-  final bool isUpdating;
-  final ValueChanged<int> onSelectPet;
-  final ValueChanged<int> onSelectActivity;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF7F7F8),
-        borderRadius: BorderRadius.circular(26),
-        border: Border.all(color: const Color(0xFFE5E7ED)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'อัปเดตระดับกิจกรรมสัตว์เลี้ยง',
-            style: TextStyle(
-              color: AppColors.primaryBlue,
-              fontSize: 22,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 10),
-          if (pets.isEmpty)
-            const Text('ยังไม่มีสัตว์เลี้ยงให้ปรับกิจกรรม')
-          else ...[
-            SizedBox(
-              height: 42,
-              child: ListView.separated(
-                scrollDirection: Axis.horizontal,
-                itemBuilder: (context, index) {
-                  final pet = pets[index];
-                  final selected = index == selectedPetIndex;
-                  return ChoiceChip(
-                    label: Text(pet.name),
-                    selected: selected,
-                    onSelected: (_) => onSelectPet(index),
-                    selectedColor: AppColors.primaryBlue,
-                    labelStyle: TextStyle(
-                      color: selected ? Colors.white : AppColors.textPrimary,
-                    ),
-                  );
-                },
-                separatorBuilder: (_, __) => const SizedBox(width: 8),
-                itemCount: pets.length,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _levelChip(0, 'น้อยมาก'),
-                _levelChip(1, 'น้อย'),
-                _levelChip(2, 'ปกติ'),
-                _levelChip(3, 'สูง'),
-              ],
-            ),
-            if (isUpdating) ...[
-              const SizedBox(height: 10),
-              const LinearProgressIndicator(),
-            ],
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _levelChip(int value, String text) {
-    final selected = value == selectedActivity;
-    return FilterChip(
-      label: Text(text),
-      selected: selected,
-      onSelected: isUpdating ? null : (_) => onSelectActivity(value),
-      selectedColor: const Color(0xFFDCE5F5),
-      labelStyle: TextStyle(
-        color: selected ? AppColors.primaryBlue : AppColors.textPrimary,
-        fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
       ),
     );
   }
@@ -598,7 +381,7 @@ class _CalendarCard extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: AppColors.primaryBlue,
-                    fontSize: 24,
+                    fontSize: AppTypography.subheading,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
@@ -661,7 +444,7 @@ class _CalendarCard extends StatelessWidget {
                             color: selected
                                 ? Colors.white
                                 : AppColors.textPrimary,
-                            fontSize: 18,
+                            fontSize: AppTypography.body,
                             fontWeight: selected
                                 ? FontWeight.w600
                                 : FontWeight.w400,
@@ -703,7 +486,7 @@ class _WeekdayText extends StatelessWidget {
           label,
           style: const TextStyle(
             color: Color(0xFF757575),
-            fontSize: 16,
+            fontSize: AppTypography.body,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -730,7 +513,10 @@ class _LegendDot extends StatelessWidget {
         const SizedBox(width: 8),
         Text(
           label,
-          style: const TextStyle(fontSize: 16, color: AppColors.textSecondary),
+          style: const TextStyle(
+            fontSize: AppTypography.body,
+            color: AppColors.textSecondary,
+          ),
         ),
       ],
     );
@@ -859,7 +645,7 @@ class _UpcomingSection extends StatelessWidget {
           'กิจกรรมที่กำลังจะมาถึง',
           style: TextStyle(
             color: AppColors.primaryBlue,
-            fontSize: 40,
+            fontSize: AppTypography.headline,
             fontWeight: FontWeight.w500,
           ),
         ),
@@ -968,7 +754,7 @@ class _EventCard extends StatelessWidget {
                     Text(
                       title,
                       style: const TextStyle(
-                        fontSize: 24,
+                        fontSize: AppTypography.subheading,
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.w500,
                       ),
@@ -985,7 +771,7 @@ class _EventCard extends StatelessWidget {
                         Text(
                           time,
                           style: const TextStyle(
-                            fontSize: 20,
+                            fontSize: AppTypography.body,
                             color: AppColors.textSecondary,
                           ),
                         ),
@@ -1009,7 +795,7 @@ class _EventCard extends StatelessWidget {
                 child: Text(
                   petName,
                   style: const TextStyle(
-                    fontSize: 20,
+                    fontSize: AppTypography.body,
                     color: AppColors.textSecondary,
                   ),
                 ),
@@ -1027,7 +813,7 @@ class _EventCard extends StatelessWidget {
                   chipText,
                   style: TextStyle(
                     color: chipColor,
-                    fontSize: 20,
+                    fontSize: AppTypography.body,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -1060,7 +846,7 @@ class _MonthlySummaryCard extends StatelessWidget {
             'สรุปกิจกรรมเดือนนี้',
             style: TextStyle(
               color: AppColors.primaryBlue,
-              fontSize: 40,
+              fontSize: AppTypography.headline,
               fontWeight: FontWeight.w500,
             ),
           ),
@@ -1134,7 +920,7 @@ class _SummaryItem extends StatelessWidget {
         Text(
           count,
           style: TextStyle(
-            fontSize: 34,
+            fontSize: AppTypography.headline,
             color: iconColor,
             fontWeight: FontWeight.w500,
           ),
@@ -1142,7 +928,10 @@ class _SummaryItem extends StatelessWidget {
         const SizedBox(height: 2),
         Text(
           label,
-          style: const TextStyle(fontSize: 20, color: AppColors.textSecondary),
+          style: const TextStyle(
+            fontSize: AppTypography.body,
+            color: AppColors.textSecondary,
+          ),
         ),
       ],
     );

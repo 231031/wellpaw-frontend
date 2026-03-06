@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:well_paw/core/theme/app_colors.dart';
 import 'package:well_paw/core/theme/app_text_styles.dart';
 
@@ -7,8 +8,20 @@ class AppTheme {
   AppTheme._();
 
   static ThemeData get lightTheme {
+    final baseTextTheme = GoogleFonts.sarabunTextTheme();
+    final appTextTheme = baseTextTheme.copyWith(
+      displayLarge: AppTextStyles.h1,
+      displayMedium: AppTextStyles.h2,
+      displaySmall: AppTextStyles.h3,
+      bodyLarge: AppTextStyles.bodyLarge,
+      bodyMedium: AppTextStyles.bodyMedium,
+      bodySmall: AppTextStyles.bodySmall,
+      labelLarge: AppTextStyles.buttonText,
+    );
+
     return ThemeData(
       useMaterial3: true,
+      fontFamily: GoogleFonts.sarabun().fontFamily,
 
       // Color Scheme
       colorScheme: ColorScheme.light(
@@ -35,15 +48,8 @@ class AppTheme {
       ),
 
       // Text Theme
-      textTheme: const TextTheme(
-        displayLarge: AppTextStyles.h1,
-        displayMedium: AppTextStyles.h2,
-        displaySmall: AppTextStyles.h3,
-        bodyLarge: AppTextStyles.bodyLarge,
-        bodyMedium: AppTextStyles.bodyMedium,
-        bodySmall: AppTextStyles.bodySmall,
-        labelLarge: AppTextStyles.buttonText,
-      ),
+      textTheme: appTextTheme,
+      primaryTextTheme: appTextTheme,
 
       // Input Decoration
       inputDecorationTheme: InputDecorationTheme(
